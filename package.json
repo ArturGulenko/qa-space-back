@@ -12,27 +12,38 @@
     "format": "prettier --write \"src/**/*.ts\""
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.744.0",
+    "@aws-sdk/s3-request-presigner": "^3.744.0",
+    "@google/genai": "^1.34.0",
+    "@google/generative-ai": "^0.24.1",
     "@nestjs/common": "^9.0.0",
+    "@nestjs/config": "^3.0.0",
     "@nestjs/core": "^9.0.0",
-    "@nestjs/platform-express": "^9.0.0",
     "@nestjs/jwt": "^9.0.0",
     "@nestjs/passport": "^9.0.0",
-    "@nestjs/config": "^9.0.0",
+    "@nestjs/platform-express": "^9.4.3",
+    "@prisma/client": "^5.0.0",
+    "@types/multer": "^2.0.0",
+    "bcrypt": "^5.1.0",
+    "cookie-parser": "^1.4.6",
+    "mime": "^4.1.0",
+    "multer": "^2.0.2",
+    "openai": "^6.14.0",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.0",
-    "bcrypt": "^5.1.0",
-    "@prisma/client": "^5.0.0",
     "prisma": "^5.0.0",
     "reflect-metadata": "^0.1.13",
-    "cookie-parser": "^1.4.6"
+    "uuid": "^11.0.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "ts-node": "^10.0.0",
-    "typescript": "^4.9.5",
+    "@nestjs/cli": "^11.0.14",
     "@types/bcrypt": "^5.0.0",
-    "@types/passport-jwt": "^3.0.6",
-    "@types/node": "^18.0.0",
     "@types/cookie-parser": "^1.4.6",
-    "prettier": "^2.8.0"
+    "@types/node": "^18.19.130",
+    "@types/passport-jwt": "^3.0.6",
+    "prettier": "^2.8.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^4.9.5"
   }
 }

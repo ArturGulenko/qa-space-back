@@ -8,9 +8,20 @@ export class WorkspaceMemberGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest()
     const user = req.user
-    const workspaceId = parseInt(req.params.id || req.params.workspaceId)
-    if (!workspaceId) return false
+    const headerWorkspace = req.headers['x-workspace-id']
+    const paramWorkspace = req.params.id || req.params.workspaceId
+    const workspaceId = parseInt(headerWorkspace || paramWorkspace, 10)
+    if (headerWorkspace && paramWorkspace && parseInt(headerWorkspace, 10) !== parseInt(paramWorkspace, 10)) {
+      return false
+    }
+    if (!workspaceId || !user?.sub) return false
+
     const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId: user.sub } })
-    return !!member
+    if (member) {
+      req.workspaceId = workspaceId
+      req.workspaceRole = member.role
+      return true
+    }
+    return false
   }
 }

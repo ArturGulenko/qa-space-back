@@ -34,7 +34,11 @@ export class AuthService {
       // Verify stored token matches (refresh tokens are stored as plain JWT, not hashed)
       if (user.refreshToken !== refreshToken) throw new UnauthorizedException()
       
-      return this.login(user)
+      const tokens = await this.login(user)
+      return {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      }
     } catch (error) {
       throw new UnauthorizedException()
     }

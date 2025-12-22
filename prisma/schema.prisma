@@ -15,16 +15,28 @@ model User {
   workspaceMembers WorkspaceMember[]
   projectRoles     ProjectRole[]
   refreshToken     String?
+  testRuns         TestRun[]
+  testRunItems     TestRunItem[]
+  attachments      Attachment[]
+  fileAssets       FileAsset[]       @relation("FileAssetUploadedBy")
+  docsCreated      Doc[]             @relation("DocCreatedBy")
+  docsUpdated      Doc[]             @relation("DocUpdatedBy")
+  docVersions      DocVersion[]      @relation("DocVersionCreatedBy")
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 }
 
 model Workspace {
-  id       Int               @id @default(autoincrement())
-  slug     String            @unique
-  name     String
-  members  WorkspaceMember[]
-  projects Project[]
+  id         Int               @id @default(autoincrement())
+  slug       String            @unique
+  name       String
+  members    WorkspaceMember[]
+  projects   Project[]
+  suites     Suite[]
+  testCases  TestCase[]
+  testRuns   TestRun[]
+  docs       Doc[]
+  fileAssets FileAsset[]
 }
 
 model WorkspaceMember {
@@ -46,6 +58,11 @@ model Project {
   workspace   Workspace     @relation(fields: [workspaceId], references: [id])
   workspaceId Int
   roles       ProjectRole[]
+  suites      Suite[]
+  testCases   TestCase[]
+  testRuns    TestRun[]
+  docs        Doc[]
+  fileAssets  FileAsset[]
 
   @@index([workspaceId])
 }
@@ -61,4 +78,208 @@ model ProjectRole {
   @@unique([projectId, userId])
   @@index([projectId])
   @@index([userId])
+}
+
+model Suite {
+  id          Int        @id @default(autoincrement())
+  name        String
+  order       Int        @default(0)
+  project     Project    @relation(fields: [projectId], references: [id])
+  projectId   Int
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id])
+  workspaceId Int
+  parent      Suite?     @relation("SuiteToSuite", fields: [parentId], references: [id])
+  parentId    Int?
+  children    Suite[]    @relation("SuiteToSuite")
+  testCases   TestCase[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([projectId])
+  @@index([workspaceId])
+  @@index([parentId])
+}
+
+model TestCase {
+  id          Int           @id @default(autoincrement())
+  key         String
+  title       String
+  status      String        @default("draft")
+  priority    String        @default("medium")
+  tags        String[]
+  version     Int           @default(1)
+  project     Project       @relation(fields: [projectId], references: [id])
+  projectId   Int
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id])
+  workspaceId Int
+  suite       Suite?        @relation(fields: [suiteId], references: [id])
+  suiteId     Int?
+  steps       TestStep[]
+  runItems    TestRunItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([projectId, key])
+  @@index([workspaceId])
+  @@index([suiteId])
+}
+
+model TestStep {
+  id         Int       @id @default(autoincrement())
+  order      Int       @default(0)
+  action     String
+  expected   String
+  testCase   TestCase  @relation(fields: [testCaseId], references: [id])
+  testCaseId Int
+}
+
+model TestRun {
+  id          Int           @id @default(autoincrement())
+  project     Project       @relation(fields: [projectId], references: [id])
+  projectId   Int
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id])
+  workspaceId Int
+  build       String
+  env         String
+  platform    String
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  createdById Int
+  items       TestRunItem[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([projectId])
+  @@index([workspaceId])
+  @@index([createdById])
+}
+
+model TestRunItem {
+  id              Int           @id @default(autoincrement())
+  testRun         TestRun       @relation(fields: [testRunId], references: [id])
+  testRunId       Int
+  testCase        TestCase      @relation(fields: [testCaseId], references: [id])
+  testCaseId      Int
+  // Snapshot data at time of run creation
+  snapshotTitle   String
+  snapshotPriority String
+  // Execution result
+  result          String?       // pass, fail, blocked, skipped
+  executedBy      User?         @relation(fields: [executedById], references: [id])
+  executedById    Int?
+  executedAt      DateTime?
+  comments        String?
+  attachments     Attachment[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([testRunId])
+  @@index([testCaseId])
+  @@index([executedById])
+}
+
+model Attachment {
+  id          Int          @id @default(autoincrement())
+  entityType  String       // "TestRunItem", "Doc", etc.
+  entityId    Int
+  fileUrl     String
+  fileName    String
+  fileSize    Int?         // in bytes
+  mimeType    String?
+  uploadedBy  User         @relation(fields: [uploadedById], references: [id])
+  uploadedById Int
+  testRunItem TestRunItem? @relation(fields: [testRunItemId], references: [id])
+  testRunItemId Int?
+  uploadedAt  DateTime     @default(now())
+
+  @@index([entityType, entityId])
+  @@index([uploadedById])
+  @@index([testRunItemId])
+}
+
+model FileAsset {
+  id          Int       @id @default(autoincrement())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId Int
+  project     Project   @relation(fields: [projectId], references: [id])
+  projectId   Int
+  provider    String    // s3|minio|gdrive|external
+  bucket      String
+  key         String
+  mimeType    String?
+  sizeBytes   Int?
+  sha256      String?
+  previewKey  String?
+  sourceUrl   String?
+  expiresAt   DateTime?
+  uploadedBy  User      @relation("FileAssetUploadedBy", fields: [uploadedById], references: [id])
+  uploadedById Int
+  uploadedAt  DateTime  @default(now())
+  docAttachments DocAttachment[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([provider, key])
+  @@index([uploadedById])
+}
+
+model Doc {
+  id           Int             @id @default(autoincrement())
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id])
+  workspaceId  Int
+  project      Project         @relation(fields: [projectId], references: [id])
+  projectId    Int
+  parent       Doc?            @relation("DocToDoc", fields: [parentId], references: [id])
+  parentId     Int?
+  children     Doc[]           @relation("DocToDoc")
+  title        String
+  type         String          @default("other")
+  status       String          @default("draft")
+  content      String
+  tags         String[]
+  order        Int             @default(0)
+  version      Int             @default(1)
+  createdBy    User            @relation("DocCreatedBy", fields: [createdById], references: [id])
+  createdById  Int
+  updatedBy    User            @relation("DocUpdatedBy", fields: [updatedById], references: [id])
+  updatedById  Int
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  versions     DocVersion[]
+  attachments  DocAttachment[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([parentId])
+  @@index([type])
+  @@index([status])
+}
+
+model DocVersion {
+  id           Int      @id @default(autoincrement())
+  doc          Doc      @relation(fields: [docId], references: [id])
+  docId        Int
+  version      Int
+  title        String
+  content      String
+  createdBy    User     @relation("DocVersionCreatedBy", fields: [createdById], references: [id])
+  createdById  Int
+  createdAt    DateTime @default(now())
+  changeNote   String?
+
+  @@index([docId])
+  @@index([version])
+}
+
+model DocAttachment {
+  id          Int        @id @default(autoincrement())
+  doc         Doc        @relation(fields: [docId], references: [id])
+  docId       Int
+  fileAsset   FileAsset  @relation(fields: [fileAssetId], references: [id])
+  fileAssetId Int
+  caption     String?
+  order       Int        @default(0)
+  createdAt   DateTime   @default(now())
+
+  @@index([docId])
+  @@index([fileAssetId])
 }

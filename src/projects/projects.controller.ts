@@ -11,6 +11,12 @@ export class ProjectsController {
   @Get('workspace/:id')
   @UseGuards(WorkspaceMemberGuard)
   async listByWorkspace(@Param('id') id: string) {
-    return this.prisma.project.findMany({ where: { workspaceId: parseInt(id) } })
+    const projects = await this.prisma.project.findMany({ where: { workspaceId: parseInt(id) } })
+    return projects.map((p) => ({
+      id: p.id.toString(),
+      workspaceId: p.workspaceId.toString(),
+      key: p.key,
+      name: p.name,
+    }))
   }
 }

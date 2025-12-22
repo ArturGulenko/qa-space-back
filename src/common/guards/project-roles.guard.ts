@@ -13,14 +13,23 @@ export class ProjectRolesGuard implements CanActivate {
     const req = context.switchToHttp().getRequest()
     const user = req.user
 
-    const projectId = parseInt(req.params.projectId || req.params.id)
-    if (!projectId) return false
+    const projectId = parseInt(req.params.projectId || req.params.id, 10)
+    if (!projectId || !user?.sub) return false
+
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } })
+    if (!project) return false
 
     const projectRole = await this.prisma.projectRole.findFirst({
       where: { projectId, userId: user.sub }
     })
     if (!projectRole) return false
+
+    // optionally check workspace membership for safety
+    if (req.headers['x-workspace-id']) {
+      const headerWorkspace = parseInt(req.headers['x-workspace-id'], 10)
+      if (headerWorkspace && headerWorkspace !== project.workspaceId) return false
+    }
+
     return roles.includes(projectRole.role)
   }
 }
-

@@ -40,3 +40,7 @@ prisma/migrations/
 logs
 *.log
 
+
+AI_API.md
+DATABASE_INFO.md
+PUSH_INSTRUCTIONS.md

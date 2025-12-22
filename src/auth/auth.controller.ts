@@ -11,12 +11,25 @@ export class AuthController {
   async login(@Body() body: { email: string; password: string }) {
     const user = await this.auth.validateUser(body.email, body.password)
     if (!user) return { error: 'invalid_credentials' }
-    return this.auth.login(user)
+    const tokens = await this.auth.login(user)
+    return {
+      tokens: {
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+      },
+      user: {
+        id: user.id.toString(),
+        email: user.email,
+        name: user.name || '',
+      },
+    }
   }
 
   @Post('refresh')
-  async refresh(@Body() body: { refreshToken: string }) {
-    return this.auth.refresh(body.refreshToken)
+  async refresh(@Body() body: { refreshToken?: string; refresh_token?: string }) {
+    const token = body.refreshToken || body.refresh_token
+    if (!token) return { error: 'refresh_token_required' }
+    return this.auth.refresh(token)
   }
 
   @Get('me')
@@ -24,6 +37,6 @@ export class AuthController {
   async me(@Request() req: any) {
     // JwtAuthGuard sets req.user
     const user = await this.users.findById(req.user?.sub)
-    return { id: user?.id, email: user?.email, name: user?.name }
+    return { id: user?.id.toString(), email: user?.email, name: user?.name || '' }
   }
 }

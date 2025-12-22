@@ -13,11 +13,12 @@ export class RolesGuard implements CanActivate {
     const req = context.switchToHttp().getRequest()
     const user = req.user
 
-    const workspaceId = parseInt(req.params.id || req.params.workspaceId)
-    if (!workspaceId) return false
+    const workspaceId = parseInt(req.workspaceId || req.headers['x-workspace-id'] || req.params.id || req.params.workspaceId, 10)
+    if (!workspaceId || !user?.sub) return false
 
     const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId: user.sub } })
     if (!member) return false
+    req.workspaceRole = member.role
     return roles.includes(member.role)
   }
 }
