@@ -63,6 +63,7 @@ export class FileAssetsService {
         provider: dto.provider || 's3',
         bucket: dto.bucket,
         key: dto.key,
+        fileName: dto.fileName ?? null,
         mimeType: dto.mimeType ?? null,
         sizeBytes: dto.sizeBytes ?? null,
         sha256: dto.sha256 ?? null,

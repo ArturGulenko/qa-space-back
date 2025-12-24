@@ -13,8 +13,9 @@ import {
 import { PrismaService } from '../prisma.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { WorkspaceMemberGuard } from '../common/guards/workspace-member.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
+import { PermissionsGuard } from '../common/guards/permissions.guard'
+import { RequirePermissions } from '../common/decorators/permissions.decorator'
+import { Permission } from '../common/permissions/permissions.enum'
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -22,8 +23,8 @@ export class TestRunsController {
   constructor(private prisma: PrismaService) {}
 
   @Post('projects/:id/test-runs')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin', 'lead', 'qa')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_RUN_CREATE)
   async create(
     @Param('id') id: string,
     @Body()
@@ -36,88 +37,115 @@ export class TestRunsController {
     },
     @Request() req: any,
   ) {
-    const projectId = parseInt(id, 10)
-    if (!projectId) throw new BadRequestException('Invalid project id')
-    if (!body?.build || !body?.env || !body?.platform) {
-      throw new BadRequestException('Build, env, and platform are required')
-    }
+    try {
+      const projectId = parseInt(id, 10)
+      if (!projectId) throw new BadRequestException('Invalid project id')
+      if (!body?.build || !body?.env || !body?.platform) {
+        throw new BadRequestException('Build, env, and platform are required')
+      }
 
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } })
-    if (!project || project.workspaceId !== req.workspaceId) throw new NotFoundException()
+      if (!req.user?.userId) {
+        throw new BadRequestException('User ID is missing from request')
+      }
 
-    // Get test cases to include in the run
-    let testCaseIds: number[] = []
-    if (body.testCaseIds && body.testCaseIds.length > 0) {
-      testCaseIds = body.testCaseIds
-    } else if (body.suiteIds && body.suiteIds.length > 0) {
-      // Get all test cases from the specified suites (including nested suites)
-      const suiteIds = body.suiteIds
-      const allSuiteIds = await this.getAllNestedSuiteIds(suiteIds, projectId)
-      const cases = await this.prisma.testCase.findMany({
+      const project = await this.prisma.project.findUnique({ where: { id: projectId } })
+      if (!project || project.workspaceId !== req.workspaceId) throw new NotFoundException()
+
+      // Get test cases to include in the run
+      let testCaseIds: number[] = []
+      if (body.testCaseIds && body.testCaseIds.length > 0) {
+        testCaseIds = body.testCaseIds
+      } else if (body.suiteIds && body.suiteIds.length > 0) {
+        // Get all test cases from the specified suites (including nested suites)
+        const suiteIds = body.suiteIds
+        const allSuiteIds = await this.getAllNestedSuiteIds(suiteIds, projectId)
+        const cases = await this.prisma.testCase.findMany({
+          where: {
+            projectId,
+            workspaceId: req.workspaceId,
+            suiteId: { in: allSuiteIds },
+          },
+        })
+        testCaseIds = cases.map((c) => c.id)
+      } else {
+        throw new BadRequestException('Either suiteIds or testCaseIds must be provided')
+      }
+
+      if (testCaseIds.length === 0) {
+        throw new BadRequestException('No test cases found to include in the run')
+      }
+
+      // Load test cases to snapshot their data
+      const testCases = await this.prisma.testCase.findMany({
         where: {
+          id: { in: testCaseIds },
           projectId,
           workspaceId: req.workspaceId,
-          suiteId: { in: allSuiteIds },
         },
       })
-      testCaseIds = cases.map((c) => c.id)
-    } else {
-      throw new BadRequestException('Either suiteIds or testCaseIds must be provided')
-    }
 
-    if (testCaseIds.length === 0) {
-      throw new BadRequestException('No test cases found to include in the run')
-    }
+      if (testCases.length === 0) {
+        throw new BadRequestException('Test cases not found or do not belong to this project')
+      }
 
-    // Load test cases to snapshot their data
-    const testCases = await this.prisma.testCase.findMany({
-      where: {
-        id: { in: testCaseIds },
-        projectId,
-        workspaceId: req.workspaceId,
-      },
-    })
-
-    // Create test run with items
-    const testRun = await this.prisma.testRun.create({
-      data: {
-        projectId,
-        workspaceId: req.workspaceId,
-        build: body.build,
-        env: body.env,
-        platform: body.platform,
-        createdById: req.user.userId,
-        items: {
-          create: testCases.map((tc) => ({
-            testCaseId: tc.id,
-            snapshotTitle: tc.title,
-            snapshotPriority: tc.priority,
-          })),
-        },
-      },
-      include: {
-        items: {
-          include: {
-            testCase: {
-              include: { steps: { orderBy: { order: 'asc' } } },
-            },
-            executedBy: {
-              select: { id: true, email: true, name: true },
-            },
-            attachments: true,
+      // Create test run with items
+      const testRun = await this.prisma.testRun.create({
+        data: {
+          projectId,
+          workspaceId: req.workspaceId,
+          build: body.build,
+          env: body.env,
+          platform: body.platform,
+          createdById: req.user.userId,
+          items: {
+            create: testCases.map((tc) => ({
+              testCaseId: tc.id,
+              snapshotTitle: tc.title,
+              snapshotPriority: tc.priority,
+            })),
           },
         },
-        createdBy: {
-          select: { id: true, email: true, name: true },
+        include: {
+          items: {
+            include: {
+              testCase: {
+                include: { steps: { orderBy: { order: 'asc' } } },
+              },
+              executedBy: {
+                select: { id: true, email: true, name: true },
+              },
+              attachments: true,
+            },
+          },
+          createdBy: {
+            select: { id: true, email: true, name: true },
+          },
         },
-      },
-    })
+      })
 
-    return this.mapTestRun(testRun)
+      return this.mapTestRun(testRun)
+    } catch (error: any) {
+      console.error('Error creating test run:', error)
+      // Re-throw known exceptions
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error
+      }
+      // Log and wrap unknown errors
+      console.error('Unexpected error details:', {
+        message: error?.message,
+        stack: error?.stack,
+        code: error?.code,
+        meta: error?.meta,
+      })
+      throw new BadRequestException(
+        error?.message || 'Failed to create test run. Please check the server logs for details.',
+      )
+    }
   }
 
   @Get('projects/:id/test-runs')
-  @UseGuards(WorkspaceMemberGuard)
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_RUN_VIEW)
   async list(@Param('id') id: string, @Request() req: any) {
     const projectId = parseInt(id, 10)
     if (!projectId) throw new BadRequestException('Invalid project id')
@@ -149,7 +177,8 @@ export class TestRunsController {
   }
 
   @Get('test-runs/:id')
-  @UseGuards(WorkspaceMemberGuard)
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_RUN_VIEW)
   async getById(@Param('id') id: string, @Request() req: any) {
     const runId = parseInt(id, 10)
     if (!runId) throw new BadRequestException('Invalid test run id')
@@ -183,8 +212,8 @@ export class TestRunsController {
   }
 
   @Patch('test-run-items/:id')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin', 'lead', 'qa')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_RUN_EXECUTE)
   async updateItem(
     @Param('id') id: string,
     @Body()
@@ -374,6 +403,7 @@ export class TestRunsController {
     }
   }
 }
+
 
 
 

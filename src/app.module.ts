@@ -11,6 +11,7 @@ import { TestRunsModule } from './test-runs/test-runs.module'
 import { AIModule } from './ai/ai.module'
 import { DocsModule } from './docs/docs.module'
 import { FileAssetsModule } from './file-assets/file-assets.module'
+import { PermissionSetsModule } from './common/permissions/permission-sets.module'
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { FileAssetsModule } from './file-assets/file-assets.module'
     AIModule,
     DocsModule,
     FileAssetsModule,
+    PermissionSetsModule,
   ],
   providers: [PrismaService]
 })

@@ -1,0 +1,65 @@
+# Multi-stage build for production
+FROM node:20-bullseye AS builder
+
+WORKDIR /usr/src/app
+
+# Install build tools for native modules
+RUN apt-get update \
+    && apt-get install -y python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Install dependencies (including dev dependencies for build)
+RUN npm ci
+
+# Copy source code and prisma schema
+COPY . .
+
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Build the application
+RUN npm run build
+
+# Production stage
+FROM node:20-bullseye
+
+WORKDIR /usr/src/app
+
+# Install build tools for native modules
+RUN apt-get update \
+    && apt-get install -y python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy Prisma files
+COPY --from=builder /usr/src/app/prisma ./prisma
+COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
+
+# Copy built application
+COPY --from=builder /usr/src/app/dist ./dist
+
+# Create non-root user for security
+RUN groupadd -g 1001 nodejs && \
+    useradd -u 1001 -g nodejs -M -s /usr/sbin/nologin nestjs && \
+    chown -R nestjs:nodejs /usr/src/app && \
+    chmod -R 755 /usr/src/app
+
+# Keep root for now to avoid permission issues with npx
+# USER nestjs
+
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Start the application
+CMD ["node", "dist/src/main.js"]

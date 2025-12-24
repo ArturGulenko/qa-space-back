@@ -1,0 +1,27 @@
+﻿# Dockerfile РґР»СЏ Р·Р°РїСѓСЃРєР° РјРёРіСЂР°С†РёР№ Prisma
+FROM node:20-bullseye
+
+WORKDIR /usr/src/app
+
+RUN apt-get update \
+    && apt-get install -y python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# Copy package files
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy prisma schema and scripts
+COPY prisma ./prisma
+COPY scripts ./scripts
+COPY tsconfig.json ./tsconfig.json
+
+# Generate Prisma Client
+RUN npx prisma generate
+
+# Default command - Р·Р°РїСѓСЃРє РјРёРіСЂР°С†РёР№
+CMD npx prisma migrate deploy && npx prisma generate
+

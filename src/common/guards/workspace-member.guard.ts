@@ -16,6 +16,17 @@ export class WorkspaceMemberGuard implements CanActivate {
     }
     if (!workspaceId || !user?.sub) return false
 
+    // Check if user is superadmin - superadmin has access to all workspaces
+    const userRecord = await this.prisma.user.findUnique({
+      where: { id: user.sub },
+      select: { isSuperAdmin: true },
+    })
+    if (userRecord?.isSuperAdmin) {
+      req.workspaceId = workspaceId
+      req.workspaceRole = 'superadmin'
+      return true
+    }
+
     const member = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId: user.sub } })
     if (member) {
       req.workspaceId = workspaceId

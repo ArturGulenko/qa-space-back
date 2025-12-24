@@ -17,21 +17,54 @@ async function bootstrap() {
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Workspace-Id'],
     });
   } else {
-    // In production, use specific origins
+    // In production, allow configured origins and local dev hosts
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+    const hasWildcard = allowedOrigins.includes('*')
+    const isLocalhost = (origin: string) =>
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:')
+
     app.enableCors({
-      origin: [
-        'http://localhost:8080',
-        'http://localhost:8081',
-        ...(process.env.ALLOWED_ORIGINS?.split(',') || []),
-      ],
+      origin: (origin, callback) => {
+        if (!origin) {
+          return callback(null, true)
+        }
+        if (hasWildcard || isLocalhost(origin) || allowedOrigins.includes(origin)) {
+          return callback(null, true)
+        }
+        return callback(new Error('Not allowed by CORS'), false)
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Workspace-Id'],
-    });
+    })
   }
   
   app.use(cookieParser())
+  
+  // Health check endpoint (before global prefix)
+  app.getHttpAdapter().get('/health', (req, res) => {
+    res.status(200).json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    })
+  })
+  
   app.setGlobalPrefix('api')
+  
+  // Health check endpoint with API prefix (for consistency)
+  app.getHttpAdapter().get('/api/health', (req, res) => {
+    res.status(200).json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    })
+  })
+  
   await app.listen(process.env.PORT || 3000)
   console.log('Listening on', process.env.PORT || 3000)
 }

@@ -12,6 +12,7 @@ model User {
   email            String            @unique
   password         String
   name             String?
+  isSuperAdmin     Boolean           @default(false)
   workspaceMembers WorkspaceMember[]
   projectRoles     ProjectRole[]
   refreshToken     String?
@@ -22,6 +23,12 @@ model User {
   docsCreated      Doc[]             @relation("DocCreatedBy")
   docsUpdated      Doc[]             @relation("DocUpdatedBy")
   docVersions      DocVersion[]      @relation("DocVersionCreatedBy")
+  docReviewRequested DocReviewWorkflow[] @relation("DocReviewRequestedBy")
+  docReviewDecided DocReviewWorkflow[] @relation("DocReviewDecidedBy")
+  docReviewActions DocReviewAction[] @relation("DocReviewActionActor")
+  docCommentsCreated DocComment[] @relation("DocCommentCreatedBy")
+  docCommentsResolved DocComment[] @relation("DocCommentResolvedBy")
+  docTemplatesCreated DocTemplate[] @relation("DocTemplateCreatedBy")
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 }
@@ -36,7 +43,10 @@ model Workspace {
   testCases  TestCase[]
   testRuns   TestRun[]
   docs       Doc[]
+  docFolders DocFolder[]
+  docTemplates DocTemplate[]
   fileAssets FileAsset[]
+  rolePermissionSets RolePermissionSet[]
 }
 
 model WorkspaceMember {
@@ -46,6 +56,7 @@ model WorkspaceMember {
   user        User      @relation(fields: [userId], references: [id])
   userId      Int
   role        String
+  customPermissions String[] // Custom permissions override for this member
 
   @@unique([workspaceId, userId])
   @@index([workspaceId])
@@ -62,6 +73,8 @@ model Project {
   testCases   TestCase[]
   testRuns    TestRun[]
   docs        Doc[]
+  docFolders  DocFolder[]
+  docTemplates DocTemplate[]
   fileAssets  FileAsset[]
 
   @@index([workspaceId])
@@ -74,6 +87,7 @@ model ProjectRole {
   user      User    @relation(fields: [userId], references: [id])
   userId    Int
   role      String
+  customPermissions String[] // Custom permissions override for this role
 
   @@unique([projectId, userId])
   @@index([projectId])
@@ -205,6 +219,7 @@ model FileAsset {
   provider    String    // s3|minio|gdrive|external
   bucket      String
   key         String
+  fileName    String?
   mimeType    String?
   sizeBytes   Int?
   sha256      String?
@@ -228,6 +243,8 @@ model Doc {
   workspaceId  Int
   project      Project         @relation(fields: [projectId], references: [id])
   projectId    Int
+  folder       DocFolder?      @relation(fields: [folderId], references: [id])
+  folderId     Int?
   parent       Doc?            @relation("DocToDoc", fields: [parentId], references: [id])
   parentId     Int?
   children     Doc[]           @relation("DocToDoc")
@@ -244,11 +261,17 @@ model Doc {
   updatedById  Int
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+  publishedAt  DateTime?
+  archivedAt   DateTime?
   versions     DocVersion[]
   attachments  DocAttachment[]
+  reviewWorkflow DocReviewWorkflow?
+  comments     DocComment[]
+  links        DocLink[]
 
   @@index([workspaceId])
   @@index([projectId])
+  @@index([folderId])
   @@index([parentId])
   @@index([type])
   @@index([status])
@@ -270,6 +293,111 @@ model DocVersion {
   @@index([version])
 }
 
+model DocReviewWorkflow {
+  id            Int       @id @default(autoincrement())
+  doc           Doc       @relation(fields: [docId], references: [id])
+  docId         Int       @unique
+  requestedBy   User      @relation("DocReviewRequestedBy", fields: [requestedById], references: [id])
+  requestedById Int
+  reviewers     Int[]
+  state         String    @default("pending") // pending | approved | rejected
+  decidedBy     User?     @relation("DocReviewDecidedBy", fields: [decidedById], references: [id])
+  decidedById   Int?
+  decidedAt     DateTime?
+  note          String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  actions       DocReviewAction[]
+
+  @@index([docId])
+  @@index([requestedById])
+  @@index([decidedById])
+}
+
+model DocReviewAction {
+  id          Int      @id @default(autoincrement())
+  workflow    DocReviewWorkflow @relation(fields: [workflowId], references: [id])
+  workflowId  Int
+  action      String   // request | approve | reject
+  note        String?
+  actor       User     @relation("DocReviewActionActor", fields: [actorId], references: [id])
+  actorId     Int
+  createdAt   DateTime @default(now())
+
+  @@index([workflowId])
+  @@index([actorId])
+}
+
+model DocLink {
+  id          Int      @id @default(autoincrement())
+  doc         Doc      @relation(fields: [docId], references: [id])
+  docId       Int
+  entityType  String   // test_case | test_plan | test_run | bug | release | requirement
+  entityId    String
+  createdAt   DateTime @default(now())
+
+  @@index([docId])
+  @@index([entityType])
+}
+
+model DocFolder {
+  id           Int        @id @default(autoincrement())
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id])
+  workspaceId  Int
+  project      Project    @relation(fields: [projectId], references: [id])
+  projectId    Int
+  parent       DocFolder? @relation("DocFolderToFolder", fields: [parentId], references: [id])
+  parentId     Int?
+  children     DocFolder[] @relation("DocFolderToFolder")
+  name         String
+  order        Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  docs         Doc[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([parentId])
+}
+
+model DocComment {
+  id           Int      @id @default(autoincrement())
+  doc          Doc      @relation(fields: [docId], references: [id])
+  docId        Int
+  version      Int?
+  anchor       String?
+  message      String
+  createdBy    User     @relation("DocCommentCreatedBy", fields: [createdById], references: [id])
+  createdById  Int
+  createdAt    DateTime @default(now())
+  resolvedAt   DateTime?
+  resolvedBy   User?    @relation("DocCommentResolvedBy", fields: [resolvedById], references: [id])
+  resolvedById Int?
+
+  @@index([docId])
+  @@index([createdById])
+  @@index([resolvedById])
+}
+
+model DocTemplate {
+  id           Int       @id @default(autoincrement())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId  Int
+  project      Project?  @relation(fields: [projectId], references: [id])
+  projectId    Int?
+  name         String
+  type         String    @default("doc")
+  content      String
+  createdBy    User      @relation("DocTemplateCreatedBy", fields: [createdById], references: [id])
+  createdById  Int
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([type])
+}
+
 model DocAttachment {
   id          Int        @id @default(autoincrement())
   doc         Doc        @relation(fields: [docId], references: [id])
@@ -282,4 +410,19 @@ model DocAttachment {
 
   @@index([docId])
   @@index([fileAssetId])
+}
+
+// Custom permission sets for roles in workspace
+model RolePermissionSet {
+  id          Int       @id @default(autoincrement())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId Int
+  role        String    // Role name (e.g., "admin", "qa", "custom_role")
+  permissions String[]  // Array of permission strings
+  isDefault   Boolean   @default(false) // If true, this is the default set for this role
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, role])
+  @@index([workspaceId])
 }

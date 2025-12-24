@@ -5,6 +5,7 @@ export class UpdateDocDto {
   status?: string
   tags?: string[]
   parentId?: number | null
+  folderId?: number | null
   order?: number
   changeNote?: string
 }

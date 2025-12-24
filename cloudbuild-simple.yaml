@@ -1,0 +1,13 @@
+﻿steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--file'
+      - 'Dockerfile.production'
+      - '--tag'
+      - 'gcr.io/${PROJECT_ID}/qa-space-backend:latest'
+      - '.'
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/${PROJECT_ID}/qa-space-backend:latest'

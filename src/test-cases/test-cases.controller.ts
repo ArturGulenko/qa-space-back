@@ -15,8 +15,9 @@ import {
 import { PrismaService } from '../prisma.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { WorkspaceMemberGuard } from '../common/guards/workspace-member.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
+import { PermissionsGuard } from '../common/guards/permissions.guard'
+import { RequirePermissions } from '../common/decorators/permissions.decorator'
+import { Permission } from '../common/permissions/permissions.enum'
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -24,7 +25,8 @@ export class TestCasesController {
   constructor(private prisma: PrismaService) {}
 
   @Get('projects/:id/test-cases')
-  @UseGuards(WorkspaceMemberGuard)
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_CASE_VIEW)
   async list(
     @Param('id') id: string,
     @Query('query') search?: string,
@@ -57,8 +59,8 @@ export class TestCasesController {
   }
 
   @Post('projects/:id/test-cases')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_CASE_CREATE)
   async create(
     @Param('id') id: string,
     @Body()
@@ -102,15 +104,16 @@ export class TestCasesController {
   }
 
   @Get('test-cases/:id')
-  @UseGuards(WorkspaceMemberGuard)
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_CASE_VIEW)
   async getById(@Param('id') id: string, @Request() req: any) {
     const testCase = await this.loadCase(parseInt(id, 10), req.workspaceId)
     return this.mapTestCase(testCase)
   }
 
   @Patch('test-cases/:id')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_CASE_UPDATE)
   async update(
     @Param('id') id: string,
     @Body()
@@ -142,8 +145,8 @@ export class TestCasesController {
   }
 
   @Delete('test-cases/:id')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_CASE_DELETE)
   async remove(@Param('id') id: string, @Request() req: any) {
     const caseId = parseInt(id, 10)
     await this.loadCase(caseId, req.workspaceId)
@@ -153,8 +156,8 @@ export class TestCasesController {
   }
 
   @Post('test-cases/:id/steps')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_CASE_UPDATE)
   async addStep(
     @Param('id') id: string,
     @Body() body: { action: string; expected: string; order?: number },
@@ -181,8 +184,8 @@ export class TestCasesController {
   }
 
   @Patch('steps/:id')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_CASE_UPDATE)
   async updateStep(@Param('id') id: string, @Body() body: { action?: string; expected?: string; order?: number }, @Request() req: any) {
     const stepId = parseInt(id, 10)
     const step = await this.prisma.testStep.findUnique({
@@ -203,8 +206,8 @@ export class TestCasesController {
   }
 
   @Delete('steps/:id')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_CASE_UPDATE)
   async deleteStep(@Param('id') id: string, @Request() req: any) {
     const stepId = parseInt(id, 10)
     const step = await this.prisma.testStep.findUnique({

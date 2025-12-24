@@ -2,6 +2,7 @@ export class FinalizeUploadDto {
   provider?: 's3' | 'minio' | 'gdrive' | 'external'
   bucket: string
   key: string
+  fileName?: string
   mimeType?: string
   sizeBytes?: number
   sha256?: string

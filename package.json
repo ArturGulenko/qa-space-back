@@ -9,6 +9,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init --preview-feature",
     "prisma:seed": "ts-node prisma/seed.ts",
+    "add-superadmin": "ts-node scripts/add-superadmin.ts",
+    "create-superadmin": "ts-node scripts/create-superadmin.ts",
+    "deploy:gcp": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-gcp.ps1",
     "format": "prettier --write \"src/**/*.ts\""
   },
   "dependencies": {

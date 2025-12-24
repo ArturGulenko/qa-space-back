@@ -35,12 +35,31 @@ yarn-error.log*
 
 # Prisma
 prisma/migrations/
+# But keep migration_lock.toml
+!prisma/migrations/migration_lock.toml
 
 # Logs
 logs
 *.log
 
+# Secrets and credentials
+*.key.json
+gcs-key.json
+jwt-secrets.json
+secrets-temp.json
+db-password.txt
+*.pem
+*.key
 
+# Temporary files
+.tmp-*/
+.tmp-*.json
+*.tmp
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Documentation (if needed)
 AI_API.md
 DATABASE_INFO.md
 PUSH_INSTRUCTIONS.md
