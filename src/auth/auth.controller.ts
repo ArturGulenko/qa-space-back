@@ -21,6 +21,7 @@ export class AuthController {
         id: user.id.toString(),
         email: user.email,
         name: user.name || '',
+        isSuperAdmin: user.isSuperAdmin,
       },
     }
   }
@@ -37,6 +38,11 @@ export class AuthController {
   async me(@Request() req: any) {
     // JwtAuthGuard sets req.user
     const user = await this.users.findById(req.user?.sub)
-    return { id: user?.id.toString(), email: user?.email, name: user?.name || '' }
+    return {
+      id: user?.id.toString(),
+      email: user?.email,
+      name: user?.name || '',
+      isSuperAdmin: user?.isSuperAdmin || false,
+    }
   }
 }

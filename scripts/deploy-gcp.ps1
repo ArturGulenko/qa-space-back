@@ -118,3 +118,4 @@ Write-Host ""
 Write-Host "Logs:" -ForegroundColor Cyan
 Write-Host "   gcloud run services logs read qa-space-backend --region=$Region --limit=50" -ForegroundColor Gray
 
+

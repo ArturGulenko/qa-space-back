@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  NotFoundException,
   Param,
   Post,
   Request,
@@ -19,6 +20,7 @@ import { Roles } from '../common/decorators/roles.decorator'
 import { GenerateTestCasesDto } from './dto/generate-test-cases.dto'
 import { ImproveTestCaseDto } from './dto/improve-test-case.dto'
 import { ImportFromTableDto } from './dto/import-from-table.dto'
+import { requireProjectAccess } from '../common/utils/project-access'
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -39,6 +41,7 @@ export class AIController {
     const projectId = parseInt(id, 10)
     if (!projectId) throw new BadRequestException('Invalid project id')
     if (!dto.description) throw new BadRequestException('Description is required')
+    await requireProjectAccess(this.prisma, projectId, req.user.sub, req.workspaceId)
 
     try {
       const generated = await this.aiService.generateTestCases(
@@ -79,6 +82,12 @@ export class AIController {
     const testCaseId = parseInt(id, 10)
     if (!testCaseId) throw new BadRequestException('Invalid test case id')
 
+    const testCase = await this.prisma.testCase.findUnique({ where: { id: testCaseId } })
+    if (!testCase || testCase.workspaceId !== req.workspaceId) {
+      throw new NotFoundException('Test case not found')
+    }
+    await requireProjectAccess(this.prisma, testCase.projectId, req.user.sub, req.workspaceId)
+
     const improved = await this.aiService.improveTestCase(
       testCaseId,
       req.workspaceId,
@@ -101,6 +110,7 @@ export class AIController {
     const projectId = parseInt(id, 10)
     if (!projectId) throw new BadRequestException('Invalid project id')
     if (!file) throw new BadRequestException('File is required')
+    await requireProjectAccess(this.prisma, projectId, req.user.sub, req.workspaceId)
 
     const parsed = await this.aiService.importFromTable(
       projectId,
@@ -128,6 +138,7 @@ export class AIController {
     const projectId = parseInt(id, 10)
     if (!projectId) throw new BadRequestException('Invalid project id')
     if (!file) throw new BadRequestException('File is required')
+    await requireProjectAccess(this.prisma, projectId, req.user.sub, req.workspaceId)
 
     // Parse file
     const dto: ImportFromTableDto = { provider: body.provider }
@@ -200,4 +211,3 @@ export class AIController {
     }
   }
 }
-

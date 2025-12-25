@@ -83,3 +83,4 @@ echo ""
 echo "📋 Просмотр логов:"
 echo "   gcloud run services logs read qa-space-backend --region=$REGION --limit=50"
 
+

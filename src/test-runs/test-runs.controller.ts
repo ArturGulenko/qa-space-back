@@ -16,6 +16,7 @@ import { WorkspaceMemberGuard } from '../common/guards/workspace-member.guard'
 import { PermissionsGuard } from '../common/guards/permissions.guard'
 import { RequirePermissions } from '../common/decorators/permissions.decorator'
 import { Permission } from '../common/permissions/permissions.enum'
+import { requireProjectAccess } from '../common/utils/project-access'
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -50,6 +51,7 @@ export class TestRunsController {
 
       const project = await this.prisma.project.findUnique({ where: { id: projectId } })
       if (!project || project.workspaceId !== req.workspaceId) throw new NotFoundException()
+      await requireProjectAccess(this.prisma, projectId, req.user.sub, req.workspaceId)
 
       // Get test cases to include in the run
       let testCaseIds: number[] = []
@@ -152,6 +154,7 @@ export class TestRunsController {
 
     const project = await this.prisma.project.findUnique({ where: { id: projectId } })
     if (!project || project.workspaceId !== req.workspaceId) throw new NotFoundException()
+    await requireProjectAccess(this.prisma, projectId, req.user.sub, req.workspaceId)
 
     const runs = await this.prisma.testRun.findMany({
       where: {
@@ -207,6 +210,7 @@ export class TestRunsController {
     if (!testRun || testRun.workspaceId !== req.workspaceId) {
       throw new NotFoundException()
     }
+    await requireProjectAccess(this.prisma, testRun.projectId, req.user.sub, req.workspaceId)
 
     return this.mapTestRun(testRun)
   }
@@ -236,6 +240,7 @@ export class TestRunsController {
     if (!item || item.testRun.workspaceId !== req.workspaceId) {
       throw new NotFoundException()
     }
+    await requireProjectAccess(this.prisma, item.testRun.projectId, req.user.sub, req.workspaceId)
 
     const updateData: any = {}
     if (body.result !== undefined) {
@@ -403,7 +408,6 @@ export class TestRunsController {
     }
   }
 }
-
 
 
 

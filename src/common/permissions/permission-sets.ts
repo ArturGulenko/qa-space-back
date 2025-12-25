@@ -249,13 +249,17 @@ export const PermissionSets = {
 /**
  * Map old role names to permission sets
  * This allows backward compatibility
+ * Supports both lowercase and capitalized role names
  */
 export const RoleToPermissionSet: Record<string, Permission[]> = {
   superadmin: [...PermissionSets.SUPERADMIN],
   owner: [...PermissionSets.WORKSPACE_OWNER],
   admin: [...PermissionSets.WORKSPACE_ADMIN],
+  Admin: [...PermissionSets.WORKSPACE_ADMIN],
   lead: [...PermissionSets.PROJECT_LEAD],
+  Lead: [...PermissionSets.PROJECT_LEAD],
   qa: [...PermissionSets.QA_ENGINEER],
+  QA: [...PermissionSets.QA_ENGINEER],
   tester: [...PermissionSets.TESTER],
   member: [...PermissionSets.VIEWER],
   viewer: [...PermissionSets.VIEWER],

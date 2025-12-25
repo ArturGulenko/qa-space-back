@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request, NotFoundException, BadRequestException } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Request, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { WorkspaceMemberGuard } from '../common/guards/workspace-member.guard'
@@ -14,8 +14,9 @@ export class WorkspacesController {
   @Get()
   @UseGuards(PermissionsGuard)
   @RequirePermissions(Permission.WORKSPACE_VIEW)
-  async list(@Request() req: any) {
+  async list(@Request() req: any, @Query('includeArchived') includeArchived?: string) {
     const userId = req.user?.sub
+    const withArchived = includeArchived === 'true'
     
     // Check if user is superadmin - superadmin sees all workspaces
     const user = await this.prisma.user.findUnique({
@@ -26,22 +27,31 @@ export class WorkspacesController {
     if (user?.isSuperAdmin) {
       // Superadmin sees all workspaces
       const allWorkspaces = await this.prisma.workspace.findMany({
+        where: withArchived ? undefined : { archivedAt: null },
         orderBy: { name: 'asc' },
       })
       return allWorkspaces.map((ws) => ({
         id: ws.id.toString(),
         slug: ws.slug,
         name: ws.name,
+        archivedAt: ws.archivedAt,
         role: 'superadmin',
       }))
     }
     
     // Regular users see only their workspaces
-    const memberships = await this.prisma.workspaceMember.findMany({ where: { userId }, include: { workspace: true } })
+    const memberships = await this.prisma.workspaceMember.findMany({
+      where: {
+        userId,
+        workspace: { archivedAt: null },
+      },
+      include: { workspace: true },
+    })
     return memberships.map((m) => ({ 
       id: m.workspace.id.toString(), 
       slug: m.workspace.slug, 
       name: m.workspace.name, 
+      archivedAt: m.workspace.archivedAt,
       role: m.role 
     }))
   }
@@ -53,19 +63,119 @@ export class WorkspacesController {
     const userId = req.user?.sub
     const ws = await this.prisma.workspace.create({ data: { name: body.name, slug: body.slug } })
     await this.prisma.workspaceMember.create({ data: { workspaceId: ws.id, userId, role: 'owner' } })
-    return ws
+    return {
+      id: ws.id.toString(),
+      slug: ws.slug,
+      name: ws.name,
+      archivedAt: ws.archivedAt,
+    }
+  }
+
+  @Patch(':id')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.WORKSPACE_UPDATE)
+  async update(@Param('id') id: string, @Body() body: { name?: string; slug?: string }) {
+    const workspaceId = parseInt(id, 10)
+    if (!workspaceId) {
+      throw new BadRequestException('Invalid workspace id')
+    }
+    const data: { name?: string; slug?: string } = {}
+    if (body.name) data.name = body.name
+    if (body.slug) data.slug = body.slug
+    if (!data.name && !data.slug) {
+      throw new BadRequestException('Nothing to update')
+    }
+    const ws = await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data,
+    })
+    return {
+      id: ws.id.toString(),
+      slug: ws.slug,
+      name: ws.name,
+      archivedAt: ws.archivedAt,
+    }
+  }
+
+  @Post(':id/archive')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.WORKSPACE_DELETE)
+  async archive(@Param('id') id: string) {
+    const workspaceId = parseInt(id, 10)
+    if (!workspaceId) {
+      throw new BadRequestException('Invalid workspace id')
+    }
+    const ws = await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { archivedAt: new Date() },
+    })
+    return {
+      id: ws.id.toString(),
+      slug: ws.slug,
+      name: ws.name,
+      archivedAt: ws.archivedAt,
+    }
+  }
+
+  @Post(':id/restore')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.WORKSPACE_UPDATE)
+  async restore(@Param('id') id: string) {
+    const workspaceId = parseInt(id, 10)
+    if (!workspaceId) {
+      throw new BadRequestException('Invalid workspace id')
+    }
+    const ws = await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { archivedAt: null },
+    })
+    return {
+      id: ws.id.toString(),
+      slug: ws.slug,
+      name: ws.name,
+      archivedAt: ws.archivedAt,
+    }
+  }
+
+  @Delete(':id')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.WORKSPACE_DELETE)
+  async remove(@Param('id') id: string) {
+    const workspaceId = parseInt(id, 10)
+    if (!workspaceId) {
+      throw new BadRequestException('Invalid workspace id')
+    }
+    try {
+      await this.prisma.workspace.delete({ where: { id: workspaceId } })
+      return { success: true }
+    } catch (error) {
+      throw new BadRequestException('Unable to delete workspace with related data')
+    }
   }
 
   @Get(':id/projects')
   @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
   @RequirePermissions(Permission.PROJECT_VIEW)
-  async projects(@Param('id') id: string) {
-    const projects = await this.prisma.project.findMany({ where: { workspaceId: parseInt(id) } })
+  async projects(@Param('id') id: string, @Query('includeArchived') includeArchived?: string) {
+    const workspaceId = parseInt(id, 10)
+    if (!workspaceId) {
+      throw new BadRequestException('Invalid workspace id')
+    }
+    
+    const withArchived = includeArchived === 'true'
+    const projects = await this.prisma.project.findMany({ 
+      where: { 
+        workspaceId,
+        ...(withArchived ? {} : { archivedAt: null })
+      },
+      orderBy: { name: 'asc' }
+    })
     return projects.map((p) => ({
       id: p.id.toString(),
       workspaceId: p.workspaceId.toString(),
       key: p.key,
       name: p.name,
+      archivedAt: p.archivedAt,
     }))
   }
 
@@ -87,6 +197,7 @@ export class WorkspacesController {
       workspaceId: project.workspaceId.toString(),
       key: project.key,
       name: project.name,
+      archivedAt: project.archivedAt,
     }
   }
 

@@ -13,6 +13,8 @@ model User {
   password         String
   name             String?
   isSuperAdmin     Boolean           @default(false)
+  language         String?           @default("en")
+  theme            String?           @default("system")
   workspaceMembers WorkspaceMember[]
   projectRoles     ProjectRole[]
   refreshToken     String?
@@ -37,6 +39,7 @@ model Workspace {
   id         Int               @id @default(autoincrement())
   slug       String            @unique
   name       String
+  archivedAt DateTime?
   members    WorkspaceMember[]
   projects   Project[]
   suites     Suite[]
@@ -68,6 +71,7 @@ model Project {
   name        String
   workspace   Workspace     @relation(fields: [workspaceId], references: [id])
   workspaceId Int
+  archivedAt  DateTime?
   roles       ProjectRole[]
   suites      Suite[]
   testCases   TestCase[]

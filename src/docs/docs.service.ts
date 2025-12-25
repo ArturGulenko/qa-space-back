@@ -12,16 +12,23 @@ import { UpdateTemplateDto } from './dto/update-template.dto'
 import { CreateFolderDto } from './dto/create-folder.dto'
 import { UpdateFolderDto } from './dto/update-folder.dto'
 import { CreateLinkDto } from './dto/create-link.dto'
+import { requireProjectAccess } from '../common/utils/project-access'
 
 @Injectable()
 export class DocsService {
   constructor(private prisma: PrismaService) {}
 
+  private async ensureProjectAccess(projectId: number, workspaceId: number, userId: number) {
+    await requireProjectAccess(this.prisma, projectId, userId, workspaceId)
+  }
+
   async list(
     projectId: number,
     workspaceId: number,
+    userId: number,
     filters: { parentId?: number; folderId?: number; type?: string; tag?: string; status?: string; query?: string },
   ) {
+    await this.ensureProjectAccess(projectId, workspaceId, userId)
     const where: any = { projectId, workspaceId }
     if (filters.parentId !== undefined) where.parentId = filters.parentId
     if (filters.folderId !== undefined) where.folderId = filters.folderId
@@ -42,7 +49,7 @@ export class DocsService {
     })
   }
 
-  async get(docId: number, workspaceId: number) {
+  async get(docId: number, workspaceId: number, userId: number) {
     const doc = await this.prisma.doc.findUnique({
       where: { id: docId },
       include: {
@@ -56,12 +63,12 @@ export class DocsService {
       },
     })
     if (!doc || doc.workspaceId !== workspaceId) throw new NotFoundException('Document not found')
+    await this.ensureProjectAccess(doc.projectId, workspaceId, userId)
     return doc
   }
 
   async create(projectId: number, workspaceId: number, userId: number, dto: CreateDocDto) {
-    const project = await this.prisma.project.findUnique({ where: { id: projectId } })
-    if (!project || project.workspaceId !== workspaceId) throw new NotFoundException('Project not found')
+    await this.ensureProjectAccess(projectId, workspaceId, userId)
     if (dto.folderId != null) {
       const folder = await this.prisma.docFolder.findUnique({ where: { id: dto.folderId } })
       if (!folder || folder.workspaceId !== workspaceId || folder.projectId !== projectId) {
@@ -89,7 +96,7 @@ export class DocsService {
   }
 
   async update(docId: number, workspaceId: number, userId: number, dto: UpdateDocDto) {
-    const doc = await this.get(docId, workspaceId)
+    const doc = await this.get(docId, workspaceId, userId)
     if (doc.status === 'published') {
       throw new BadRequestException('Published document is read-only. Create a draft to edit.')
     }
@@ -133,7 +140,7 @@ export class DocsService {
   }
 
   async archive(docId: number, workspaceId: number, userId: number) {
-    const doc = await this.get(docId, workspaceId)
+    const doc = await this.get(docId, workspaceId, userId)
 
     await this.prisma.docVersion.create({
       data: {
@@ -160,7 +167,7 @@ export class DocsService {
   }
 
   async restore(docId: number, workspaceId: number, userId: number) {
-    const doc = await this.get(docId, workspaceId)
+    const doc = await this.get(docId, workspaceId, userId)
 
     await this.prisma.docVersion.create({
       data: {
@@ -187,7 +194,7 @@ export class DocsService {
   }
 
   async publish(docId: number, workspaceId: number, userId: number) {
-    const doc = await this.get(docId, workspaceId)
+    const doc = await this.get(docId, workspaceId, userId)
     if (doc.status !== 'approved') {
       throw new BadRequestException('Document must be approved before publishing')
     }
@@ -206,7 +213,7 @@ export class DocsService {
   }
 
   async unpublish(docId: number, workspaceId: number, userId: number) {
-    const doc = await this.get(docId, workspaceId)
+    const doc = await this.get(docId, workspaceId, userId)
     if (doc.status !== 'published') {
       throw new BadRequestException('Document is not published')
     }
@@ -222,7 +229,7 @@ export class DocsService {
   }
 
   async createDraft(docId: number, workspaceId: number, userId: number) {
-    const doc = await this.get(docId, workspaceId)
+    const doc = await this.get(docId, workspaceId, userId)
     if (doc.status !== 'published') {
       throw new BadRequestException('Document must be published to create a draft')
     }
@@ -251,8 +258,8 @@ export class DocsService {
     return { draftCreated: true }
   }
 
-  async listVersions(docId: number, workspaceId: number) {
-    await this.get(docId, workspaceId)
+  async listVersions(docId: number, workspaceId: number, userId: number) {
+    await this.get(docId, workspaceId, userId)
     return this.prisma.docVersion.findMany({
       where: { docId },
       orderBy: { version: 'desc' },
@@ -260,7 +267,7 @@ export class DocsService {
   }
 
   async restoreVersion(docId: number, workspaceId: number, version: number, userId: number) {
-    const doc = await this.get(docId, workspaceId)
+    const doc = await this.get(docId, workspaceId, userId)
     const ver = await this.prisma.docVersion.findFirst({ where: { docId, version } })
     if (!ver) throw new NotFoundException('Version not found')
 
@@ -289,8 +296,8 @@ export class DocsService {
     })
   }
 
-  async addAttachment(docId: number, workspaceId: number, dto: AttachFileDto) {
-    const doc = await this.get(docId, workspaceId)
+  async addAttachment(docId: number, workspaceId: number, userId: number, dto: AttachFileDto) {
+    const doc = await this.get(docId, workspaceId, userId)
     const asset = await this.prisma.fileAsset.findUnique({ where: { id: dto.fileAssetId } })
     if (!asset || asset.workspaceId !== workspaceId || asset.projectId !== doc.projectId) {
       throw new BadRequestException('File asset not found or not in workspace/project')
@@ -306,7 +313,7 @@ export class DocsService {
     })
   }
 
-  async removeAttachment(docId: number, workspaceId: number, attachmentId: number) {
+  async removeAttachment(docId: number, workspaceId: number, userId: number, attachmentId: number) {
     const attachment = await this.prisma.docAttachment.findUnique({
       where: { id: attachmentId },
       include: { doc: true },
@@ -314,12 +321,13 @@ export class DocsService {
     if (!attachment || attachment.doc.workspaceId !== workspaceId || attachment.docId !== docId) {
       throw new NotFoundException('Attachment not found')
     }
+    await this.ensureProjectAccess(attachment.doc.projectId, workspaceId, userId)
     await this.prisma.docAttachment.delete({ where: { id: attachmentId } })
     return { deleted: true }
   }
 
-  async listComments(docId: number, workspaceId: number) {
-    await this.get(docId, workspaceId)
+  async listComments(docId: number, workspaceId: number, userId: number) {
+    await this.get(docId, workspaceId, userId)
     return this.prisma.docComment.findMany({
       where: { docId },
       orderBy: { createdAt: 'desc' },
@@ -328,7 +336,7 @@ export class DocsService {
   }
 
   async addComment(docId: number, workspaceId: number, userId: number, dto: CreateCommentDto) {
-    await this.get(docId, workspaceId)
+    await this.get(docId, workspaceId, userId)
     if (!dto.message || dto.message.trim().length === 0) {
       throw new BadRequestException('Message is required')
     }
@@ -352,6 +360,7 @@ export class DocsService {
     if (!comment || comment.doc.workspaceId !== workspaceId) {
       throw new NotFoundException('Comment not found')
     }
+    await this.ensureProjectAccess(comment.doc.projectId, workspaceId, userId)
 
     return this.prisma.docComment.update({
       where: { id: commentId },
@@ -374,8 +383,8 @@ export class DocsService {
     })
   }
 
-  async getReview(docId: number, workspaceId: number) {
-    await this.get(docId, workspaceId)
+  async getReview(docId: number, workspaceId: number, userId: number) {
+    await this.get(docId, workspaceId, userId)
     return this.prisma.docReviewWorkflow.findUnique({
       where: { docId },
       include: { actions: { orderBy: { createdAt: 'desc' } } },
@@ -383,7 +392,7 @@ export class DocsService {
   }
 
   async requestReview(docId: number, workspaceId: number, userId: number, dto: ReviewRequestDto) {
-    const doc = await this.get(docId, workspaceId)
+    const doc = await this.get(docId, workspaceId, userId)
     if (!dto.reviewers || dto.reviewers.length === 0) {
       throw new BadRequestException('Reviewers are required')
     }
@@ -435,7 +444,7 @@ export class DocsService {
   }
 
   async approveReview(docId: number, workspaceId: number, userId: number, dto: ReviewActionDto) {
-    await this.get(docId, workspaceId)
+    await this.get(docId, workspaceId, userId)
     const workflow = await this.prisma.docReviewWorkflow.findUnique({ where: { docId } })
     if (!workflow || workflow.state !== 'pending') {
       throw new BadRequestException('No pending review workflow')
@@ -472,7 +481,7 @@ export class DocsService {
   }
 
   async rejectReview(docId: number, workspaceId: number, userId: number, dto: ReviewActionDto) {
-    await this.get(docId, workspaceId)
+    await this.get(docId, workspaceId, userId)
     const workflow = await this.prisma.docReviewWorkflow.findUnique({ where: { docId } })
     if (!workflow || workflow.state !== 'pending') {
       throw new BadRequestException('No pending review workflow')
@@ -508,7 +517,8 @@ export class DocsService {
     return updated
   }
 
-  async listTemplates(projectId: number, workspaceId: number, type?: string) {
+  async listTemplates(projectId: number, workspaceId: number, userId: number, type?: string) {
+    await this.ensureProjectAccess(projectId, workspaceId, userId)
     const where: any = { workspaceId, projectId }
     if (type) where.type = type
     return this.prisma.docTemplate.findMany({
@@ -518,6 +528,7 @@ export class DocsService {
   }
 
   async createTemplate(projectId: number, workspaceId: number, userId: number, dto: CreateTemplateDto) {
+    await this.ensureProjectAccess(projectId, workspaceId, userId)
     return this.prisma.docTemplate.create({
       data: {
         name: dto.name,
@@ -530,11 +541,12 @@ export class DocsService {
     })
   }
 
-  async updateTemplate(templateId: number, workspaceId: number, dto: UpdateTemplateDto) {
+  async updateTemplate(templateId: number, workspaceId: number, userId: number, dto: UpdateTemplateDto) {
     const template = await this.prisma.docTemplate.findUnique({ where: { id: templateId } })
     if (!template || template.workspaceId !== workspaceId) {
       throw new NotFoundException('Template not found')
     }
+    await this.ensureProjectAccess(template.projectId, workspaceId, userId)
     return this.prisma.docTemplate.update({
       where: { id: templateId },
       data: {
@@ -545,23 +557,26 @@ export class DocsService {
     })
   }
 
-  async deleteTemplate(templateId: number, workspaceId: number) {
+  async deleteTemplate(templateId: number, workspaceId: number, userId: number) {
     const template = await this.prisma.docTemplate.findUnique({ where: { id: templateId } })
     if (!template || template.workspaceId !== workspaceId) {
       throw new NotFoundException('Template not found')
     }
+    await this.ensureProjectAccess(template.projectId, workspaceId, userId)
     await this.prisma.docTemplate.delete({ where: { id: templateId } })
     return { deleted: true }
   }
 
-  async listFolders(projectId: number, workspaceId: number) {
+  async listFolders(projectId: number, workspaceId: number, userId: number) {
+    await this.ensureProjectAccess(projectId, workspaceId, userId)
     return this.prisma.docFolder.findMany({
       where: { projectId, workspaceId },
       orderBy: [{ parentId: 'asc' }, { order: 'asc' }, { name: 'asc' }],
     })
   }
 
-  async createFolder(projectId: number, workspaceId: number, dto: CreateFolderDto) {
+  async createFolder(projectId: number, workspaceId: number, userId: number, dto: CreateFolderDto) {
+    await this.ensureProjectAccess(projectId, workspaceId, userId)
     if (dto.parentId != null) {
       const parent = await this.prisma.docFolder.findUnique({ where: { id: dto.parentId } })
       if (!parent || parent.workspaceId !== workspaceId || parent.projectId !== projectId) {
@@ -579,11 +594,12 @@ export class DocsService {
     })
   }
 
-  async updateFolder(folderId: number, workspaceId: number, dto: UpdateFolderDto) {
+  async updateFolder(folderId: number, workspaceId: number, userId: number, dto: UpdateFolderDto) {
     const folder = await this.prisma.docFolder.findUnique({ where: { id: folderId } })
     if (!folder || folder.workspaceId !== workspaceId) {
       throw new NotFoundException('Folder not found')
     }
+    await this.ensureProjectAccess(folder.projectId, workspaceId, userId)
     if (dto.parentId != null && dto.parentId === folderId) {
       throw new BadRequestException('Folder cannot be its own parent')
     }
@@ -603,11 +619,12 @@ export class DocsService {
     })
   }
 
-  async deleteFolder(folderId: number, workspaceId: number) {
+  async deleteFolder(folderId: number, workspaceId: number, userId: number) {
     const folder = await this.prisma.docFolder.findUnique({ where: { id: folderId } })
     if (!folder || folder.workspaceId !== workspaceId) {
       throw new NotFoundException('Folder not found')
     }
+    await this.ensureProjectAccess(folder.projectId, workspaceId, userId)
     const childCount = await this.prisma.docFolder.count({ where: { parentId: folderId } })
     if (childCount > 0) {
       throw new BadRequestException('Folder is not empty')
@@ -620,16 +637,16 @@ export class DocsService {
     return { deleted: true }
   }
 
-  async listLinks(docId: number, workspaceId: number) {
-    await this.get(docId, workspaceId)
+  async listLinks(docId: number, workspaceId: number, userId: number) {
+    await this.get(docId, workspaceId, userId)
     return this.prisma.docLink.findMany({
       where: { docId },
       orderBy: { createdAt: 'desc' },
     })
   }
 
-  async addLink(docId: number, workspaceId: number, dto: CreateLinkDto) {
-    await this.get(docId, workspaceId)
+  async addLink(docId: number, workspaceId: number, userId: number, dto: CreateLinkDto) {
+    await this.get(docId, workspaceId, userId)
     if (!dto.entityType || !dto.entityId) {
       throw new BadRequestException('entityType and entityId are required')
     }
@@ -642,7 +659,7 @@ export class DocsService {
     })
   }
 
-  async deleteLink(linkId: number, workspaceId: number) {
+  async deleteLink(linkId: number, workspaceId: number, userId: number) {
     const link = await this.prisma.docLink.findUnique({
       where: { id: linkId },
       include: { doc: true },
@@ -650,6 +667,7 @@ export class DocsService {
     if (!link || link.doc.workspaceId !== workspaceId) {
       throw new NotFoundException('Link not found')
     }
+    await this.ensureProjectAccess(link.doc.projectId, workspaceId, userId)
     await this.prisma.docLink.delete({ where: { id: linkId } })
     return { deleted: true }
   }

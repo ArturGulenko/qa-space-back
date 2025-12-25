@@ -18,6 +18,7 @@ import { WorkspaceMemberGuard } from '../common/guards/workspace-member.guard'
 import { PermissionsGuard } from '../common/guards/permissions.guard'
 import { RequirePermissions } from '../common/decorators/permissions.decorator'
 import { Permission } from '../common/permissions/permissions.enum'
+import { requireProjectAccess } from '../common/utils/project-access'
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -29,6 +30,7 @@ export class TestCasesController {
   @RequirePermissions(Permission.TEST_CASE_VIEW)
   async list(
     @Param('id') id: string,
+    @Request() req: any,
     @Query('query') search?: string,
     @Query('suiteId') suiteId?: string,
     @Query('tag') tag?: string,
@@ -37,6 +39,7 @@ export class TestCasesController {
   ) {
     const projectId = parseInt(id, 10)
     if (!projectId) throw new BadRequestException('Invalid project id')
+    await requireProjectAccess(this.prisma, projectId, req.user.sub, req.workspaceId)
 
     const where: any = { projectId }
     if (suiteId) where.suiteId = parseInt(suiteId, 10)
@@ -80,6 +83,7 @@ export class TestCasesController {
 
     const project = await this.prisma.project.findUnique({ where: { id: projectId } })
     if (!project || project.workspaceId !== req.workspaceId) throw new NotFoundException()
+    await requireProjectAccess(this.prisma, projectId, req.user.sub, req.workspaceId)
 
     const nextIndex = await this.prisma.testCase.count({ where: { projectId } }) + 1
     const key = `${project.key}-TC-${nextIndex.toString().padStart(5, '0')}`
@@ -107,7 +111,7 @@ export class TestCasesController {
   @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
   @RequirePermissions(Permission.TEST_CASE_VIEW)
   async getById(@Param('id') id: string, @Request() req: any) {
-    const testCase = await this.loadCase(parseInt(id, 10), req.workspaceId)
+    const testCase = await this.loadCase(parseInt(id, 10), req.workspaceId, req.user.sub)
     return this.mapTestCase(testCase)
   }
 
@@ -127,7 +131,7 @@ export class TestCasesController {
     @Request() req: any,
   ) {
     const caseId = parseInt(id, 10)
-    const existing = await this.loadCase(caseId, req.workspaceId)
+    const existing = await this.loadCase(caseId, req.workspaceId, req.user.sub)
 
     const updated = await this.prisma.testCase.update({
       where: { id: caseId },
@@ -149,7 +153,7 @@ export class TestCasesController {
   @RequirePermissions(Permission.TEST_CASE_DELETE)
   async remove(@Param('id') id: string, @Request() req: any) {
     const caseId = parseInt(id, 10)
-    await this.loadCase(caseId, req.workspaceId)
+    await this.loadCase(caseId, req.workspaceId, req.user.sub)
     await this.prisma.testStep.deleteMany({ where: { testCaseId: caseId } })
     await this.prisma.testCase.delete({ where: { id: caseId } })
     return { deleted: true }
@@ -164,7 +168,7 @@ export class TestCasesController {
     @Request() req: any,
   ) {
     const caseId = parseInt(id, 10)
-    await this.loadCase(caseId, req.workspaceId)
+    await this.loadCase(caseId, req.workspaceId, req.user.sub)
     if (!body?.action || !body?.expected) throw new BadRequestException('Action and expected are required')
 
     const step = await this.prisma.testStep.create({
@@ -193,6 +197,7 @@ export class TestCasesController {
       include: { testCase: true },
     })
     if (!step || step.testCase.workspaceId !== req.workspaceId) throw new NotFoundException()
+    await requireProjectAccess(this.prisma, step.testCase.projectId, req.user.sub, req.workspaceId)
 
     const updated = await this.prisma.testStep.update({
       where: { id: stepId },
@@ -215,11 +220,12 @@ export class TestCasesController {
       include: { testCase: true },
     })
     if (!step || step.testCase.workspaceId !== req.workspaceId) throw new NotFoundException()
+    await requireProjectAccess(this.prisma, step.testCase.projectId, req.user.sub, req.workspaceId)
     await this.prisma.testStep.delete({ where: { id: stepId } })
     return { deleted: true }
   }
 
-  private async loadCase(id: number, workspaceId: number) {
+  private async loadCase(id: number, workspaceId: number, userId: number) {
     if (!id) throw new BadRequestException('Invalid test case id')
     const testCase = await this.prisma.testCase.findUnique({
       where: { id },
@@ -228,6 +234,7 @@ export class TestCasesController {
     if (!testCase || testCase.workspaceId !== workspaceId) {
       throw new NotFoundException()
     }
+    await requireProjectAccess(this.prisma, testCase.projectId, userId, workspaceId)
     return testCase
   }
 
@@ -254,4 +261,3 @@ export class TestCasesController {
     }
   }
 }
-

@@ -79,7 +79,7 @@ export class PermissionsGuard implements CanActivate {
     }
 
     // Try to get permissions from project context
-    const projectId = this.getProjectId(req)
+    const projectId = await this.getProjectId(req)
     if (projectId) {
       const projectRole = await this.prisma.projectRole.findFirst({
         where: { projectId, userId },
@@ -108,6 +108,33 @@ export class PermissionsGuard implements CanActivate {
         return await this.getPermissionsForWorkspaceRole(
           projectRole.project.workspaceId,
           projectRole.role,
+        )
+      }
+    }
+
+    // If no workspace/project context, check if user has any workspace membership
+    // This is needed for endpoints like GET /workspaces where we need to verify
+    // that user has access to at least one workspace
+    if (!workspaceId && !projectId) {
+      const hasWorkspaceMembership = await this.prisma.workspaceMember.findFirst({
+        where: { userId },
+        select: {
+          id: true,
+          role: true,
+          workspaceId: true,
+          customPermissions: true,
+        },
+      }) as any
+      
+      if (hasWorkspaceMembership) {
+        // If user has workspace membership, return permissions for that role
+        // This allows users to access workspace list endpoint
+        if (hasWorkspaceMembership.customPermissions && hasWorkspaceMembership.customPermissions.length > 0) {
+          return hasWorkspaceMembership.customPermissions as Permission[]
+        }
+        return await this.getPermissionsForWorkspaceRole(
+          hasWorkspaceMembership.workspaceId,
+          hasWorkspaceMembership.role,
         )
       }
     }
@@ -144,9 +171,44 @@ export class PermissionsGuard implements CanActivate {
     return workspaceId && !isNaN(workspaceId) ? workspaceId : null
   }
 
-  private getProjectId(req: any): number | null {
-    const projectId = parseInt(req.params.projectId || req.params.id, 10)
-    return projectId && !isNaN(projectId) ? projectId : null
+  private async getProjectId(req: any): Promise<number | null> {
+    // First, try to get projectId directly from params
+    const directProjectId = parseInt(req.params.projectId, 10)
+    if (directProjectId && !isNaN(directProjectId)) {
+      return directProjectId
+    }
+
+    // Check the request path to determine if this is a test case or step route
+    const path = req.url || req.path || ''
+    const hasIdParam = req.params.id && !isNaN(parseInt(req.params.id, 10))
+
+    // Check if this is a test case route (e.g., PATCH /test-cases/:id)
+    if (hasIdParam && path.includes('/test-cases/')) {
+      const testCaseId = parseInt(req.params.id, 10)
+      const testCase = await this.prisma.testCase.findUnique({
+        where: { id: testCaseId },
+        select: { projectId: true },
+      })
+      if (testCase) {
+        return testCase.projectId
+      }
+    }
+
+    // Check if this is a step route (e.g., PATCH /steps/:id)
+    if (hasIdParam && path.includes('/steps/') && !path.includes('/test-cases/')) {
+      const stepId = parseInt(req.params.id, 10)
+      const step = await this.prisma.testStep.findUnique({
+        where: { id: stepId },
+        select: { testCase: { select: { projectId: true } } },
+      })
+      if (step?.testCase) {
+        return step.testCase.projectId
+      }
+    }
+
+    // Fallback to treating req.params.id as projectId (for routes like /projects/:id)
+    const fallbackProjectId = parseInt(req.params.id, 10)
+    return fallbackProjectId && !isNaN(fallbackProjectId) ? fallbackProjectId : null
   }
 
   /**

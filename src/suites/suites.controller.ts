@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { WorkspaceMemberGuard } from '../common/guards/workspace-member.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
+import { requireProjectAccess } from '../common/utils/project-access'
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -27,6 +28,7 @@ export class SuitesController {
   async listByProject(@Param('id') id: string, @Request() req: any) {
     const projectId = parseInt(id, 10)
     if (!projectId) throw new BadRequestException('Invalid project id')
+    await requireProjectAccess(this.prisma, projectId, req.user.sub, req.workspaceId)
 
     const suites = await this.prisma.suite.findMany({
       where: { projectId },
@@ -57,6 +59,7 @@ export class SuitesController {
     if (!body?.name) throw new BadRequestException('Name is required')
 
     const workspaceId = req.workspaceId as number
+    await requireProjectAccess(this.prisma, projectId, req.user.sub, workspaceId)
     const suite = await this.prisma.suite.create({
       data: {
         name: body.name,
@@ -93,6 +96,7 @@ export class SuitesController {
     if (!suite || suite.workspaceId !== req.workspaceId) {
       throw new NotFoundException()
     }
+    await requireProjectAccess(this.prisma, suite.projectId, req.user.sub, req.workspaceId)
 
     const updated = await this.prisma.suite.update({
       where: { id: suiteId },
@@ -124,6 +128,7 @@ export class SuitesController {
     if (!suite || suite.workspaceId !== req.workspaceId) {
       throw new NotFoundException()
     }
+    await requireProjectAccess(this.prisma, suite.projectId, req.user.sub, req.workspaceId)
     await this.prisma.testCase.updateMany({
       where: { suiteId },
       data: { suiteId: null },
@@ -132,4 +137,3 @@ export class SuitesController {
     return { deleted: true }
   }
 }
-

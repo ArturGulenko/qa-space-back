@@ -59,3 +59,4 @@ curl https://YOUR-SERVICE-URL/health
 
 Полная документация: `../GCP_DEPLOYMENT.md`
 
+

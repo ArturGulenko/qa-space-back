@@ -113,3 +113,4 @@ Write-Host "   gcloud run services describe qa-space-backend --region=$REGION" -
 Write-Host "   gcloud sql instances describe $DB_INSTANCE" -ForegroundColor Gray
 Write-Host "   gsutil ls gs://$BUCKET_NAME" -ForegroundColor Gray
 
+
