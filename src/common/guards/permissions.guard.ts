@@ -58,7 +58,20 @@ export class PermissionsGuard implements CanActivate {
    */
   private async getUserPermissions(req: any, userId: number): Promise<Permission[]> {
     // Try to get permissions from workspace context
-    const workspaceId = this.getWorkspaceId(req)
+    let workspaceId = this.getWorkspaceId(req)
+    if (req.url?.includes('/docs/') && req.params.id) {
+      const docId = parseInt(req.params.id, 10)
+      if (docId && !isNaN(docId)) {
+        const doc = await this.prisma.doc.findUnique({
+          where: { id: docId },
+          select: { workspaceId: true },
+        })
+        if (doc) {
+          workspaceId = doc.workspaceId
+          req.workspaceId = doc.workspaceId
+        }
+      }
+    }
     if (workspaceId) {
       const workspaceMember = await this.prisma.workspaceMember.findFirst({
         where: { workspaceId, userId },
@@ -165,8 +178,11 @@ export class PermissionsGuard implements CanActivate {
   }
 
   private getWorkspaceId(req: any): number | null {
+    if (req.workspaceId && !isNaN(parseInt(req.workspaceId, 10))) {
+      return parseInt(req.workspaceId, 10)
+    }
     const headerWorkspace = req.headers['x-workspace-id']
-    const paramWorkspace = req.params.id || req.params.workspaceId
+    const paramWorkspace = req.params.workspaceId || (!req.url?.includes('/docs/') ? req.params.id : undefined)
     const workspaceId = parseInt(headerWorkspace || paramWorkspace, 10)
     return workspaceId && !isNaN(workspaceId) ? workspaceId : null
   }
@@ -224,4 +240,3 @@ export class PermissionsGuard implements CanActivate {
     return user?.isSuperAdmin ?? false
   }
 }
-

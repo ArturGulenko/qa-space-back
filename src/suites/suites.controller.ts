@@ -14,8 +14,9 @@ import {
 import { PrismaService } from '../prisma.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { WorkspaceMemberGuard } from '../common/guards/workspace-member.guard'
-import { RolesGuard } from '../common/guards/roles.guard'
-import { Roles } from '../common/decorators/roles.decorator'
+import { PermissionsGuard } from '../common/guards/permissions.guard'
+import { RequirePermissions } from '../common/decorators/permissions.decorator'
+import { Permission } from '../common/permissions/permissions.enum'
 import { requireProjectAccess } from '../common/utils/project-access'
 
 @Controller()
@@ -24,7 +25,8 @@ export class SuitesController {
   constructor(private prisma: PrismaService) {}
 
   @Get('projects/:id/suites')
-  @UseGuards(WorkspaceMemberGuard)
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.SUITE_VIEW)
   async listByProject(@Param('id') id: string, @Request() req: any) {
     const projectId = parseInt(id, 10)
     if (!projectId) throw new BadRequestException('Invalid project id')
@@ -37,6 +39,8 @@ export class SuitesController {
     return suites.map((s) => ({
       id: s.id.toString(),
       name: s.name,
+      description: s.description,
+      tags: s.tags,
       order: s.order,
       projectId: s.projectId.toString(),
       workspaceId: s.workspaceId.toString(),
@@ -47,11 +51,11 @@ export class SuitesController {
   }
 
   @Post('projects/:id/suites')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.SUITE_CREATE)
   async createSuite(
     @Param('id') id: string,
-    @Body() body: { name: string; parentId?: number; order?: number },
+    @Body() body: { name: string; description?: string; tags?: string[]; parentId?: number; order?: number },
     @Request() req: any,
   ) {
     const projectId = parseInt(id, 10)
@@ -63,6 +67,8 @@ export class SuitesController {
     const suite = await this.prisma.suite.create({
       data: {
         name: body.name,
+        description: body.description ?? null,
+        tags: body.tags ?? [],
         order: body.order ?? 0,
         projectId,
         workspaceId,
@@ -72,6 +78,8 @@ export class SuitesController {
     return {
       id: suite.id.toString(),
       name: suite.name,
+      description: suite.description,
+      tags: suite.tags,
       order: suite.order,
       projectId: suite.projectId.toString(),
       workspaceId: suite.workspaceId.toString(),
@@ -82,11 +90,11 @@ export class SuitesController {
   }
 
   @Patch('suites/:id')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.SUITE_UPDATE)
   async updateSuite(
     @Param('id') id: string,
-    @Body() body: { name?: string; parentId?: number | null; order?: number },
+    @Body() body: { name?: string; description?: string | null; tags?: string[]; parentId?: number | null; order?: number },
     @Request() req: any,
   ) {
     const suiteId = parseInt(id, 10)
@@ -102,6 +110,8 @@ export class SuitesController {
       where: { id: suiteId },
       data: {
         name: body.name ?? suite.name,
+        description: body.description !== undefined ? body.description : suite.description,
+        tags: body.tags !== undefined ? body.tags : suite.tags,
         parentId: body.parentId !== undefined ? body.parentId : suite.parentId,
         order: body.order ?? suite.order,
       },
@@ -109,6 +119,8 @@ export class SuitesController {
     return {
       id: updated.id.toString(),
       name: updated.name,
+      description: updated.description,
+      tags: updated.tags,
       order: updated.order,
       projectId: updated.projectId.toString(),
       workspaceId: updated.workspaceId.toString(),
@@ -119,8 +131,8 @@ export class SuitesController {
   }
 
   @Delete('suites/:id')
-  @UseGuards(WorkspaceMemberGuard, RolesGuard)
-  @Roles('owner', 'admin')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.SUITE_DELETE)
   async deleteSuite(@Param('id') id: string, @Request() req: any) {
     const suiteId = parseInt(id, 10)
     if (!suiteId) throw new BadRequestException('Invalid suite id')

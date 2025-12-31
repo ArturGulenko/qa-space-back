@@ -107,11 +107,11 @@ export class AIService {
 
     // Extract unique tags and priorities from project
     const projectTags = Array.from(
-      new Set(project.testCases.flatMap((tc) => tc.tags)),
-    )
+      new Set(project.testCases.flatMap((tc) => (tc.tags as string[]) || [])),
+    ) as string[]
     const projectPriorities = Array.from(
-      new Set(project.testCases.map((tc) => tc.priority)),
-    )
+      new Set(project.testCases.map((tc) => tc.priority as string)),
+    ) as string[]
 
     try {
       const provider = this.getProvider(dto.provider)

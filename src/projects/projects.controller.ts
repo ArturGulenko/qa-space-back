@@ -5,11 +5,49 @@ import { WorkspaceMemberGuard } from '../common/guards/workspace-member.guard'
 import { PermissionsGuard } from '../common/guards/permissions.guard'
 import { RequirePermissions } from '../common/decorators/permissions.decorator'
 import { Permission } from '../common/permissions/permissions.enum'
+import { requireProjectAccess } from '../common/utils/project-access'
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
 export class ProjectsController {
   constructor(private prisma: PrismaService) {}
+
+  @Get(':id/roles/me')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.PROJECT_VIEW)
+  async getMyRole(@Param('id') id: string, @Request() req: any) {
+    const projectId = parseInt(id, 10)
+    if (!projectId) {
+      throw new BadRequestException('Invalid project id')
+    }
+
+    const userId = req.user?.sub
+    await requireProjectAccess(this.prisma, projectId, userId, req.workspaceId)
+
+    // Get user's project role
+    const projectRole = await this.prisma.projectRole.findFirst({
+      where: {
+        projectId,
+        userId,
+      },
+      select: {
+        id: true,
+        role: true,
+        customPermissions: true,
+      },
+    }) as any
+
+    if (!projectRole) {
+      throw new NotFoundException('You do not have a role in this project')
+    }
+
+    return {
+      role: {
+        role: projectRole.role,
+        customPermissions: projectRole.customPermissions || [],
+      },
+    }
+  }
 
   @Get('workspace/:id')
   @UseGuards(WorkspaceMemberGuard, PermissionsGuard)

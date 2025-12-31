@@ -56,6 +56,75 @@ export class WorkspacesController {
     }))
   }
 
+  @Get(':id')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.WORKSPACE_VIEW)
+  async getById(@Param('id') id: string, @Request() req: any) {
+    const workspaceId = parseInt(id, 10)
+    if (!workspaceId) {
+      throw new BadRequestException('Invalid workspace id')
+    }
+
+    const userId = req.user?.sub
+
+    // Check if user is superadmin
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isSuperAdmin: true },
+    })
+
+    // Get workspace
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+    })
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found')
+    }
+
+    // For superadmin, return workspace with superadmin role
+    if (user?.isSuperAdmin) {
+      return {
+        id: workspace.id.toString(),
+        slug: workspace.slug,
+        name: workspace.name,
+        archivedAt: workspace.archivedAt,
+        member: {
+          role: 'superadmin',
+          customPermissions: [],
+        },
+      }
+    }
+
+    // Get user's membership in this workspace
+    const member = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId,
+      },
+      select: {
+        id: true,
+        role: true,
+        customPermissions: true,
+      },
+    }) as any
+
+    if (!member) {
+      throw new NotFoundException('You are not a member of this workspace')
+    }
+
+    return {
+      id: workspace.id.toString(),
+      slug: workspace.slug,
+      name: workspace.name,
+      archivedAt: workspace.archivedAt,
+      member: {
+        role: member.role,
+        customPermissions: member.customPermissions || [],
+      },
+    }
+  }
+
   @Post()
   @UseGuards(PermissionsGuard)
   @RequirePermissions(Permission.WORKSPACE_CREATE)

@@ -12,6 +12,8 @@ import { AIModule } from './ai/ai.module'
 import { DocsModule } from './docs/docs.module'
 import { FileAssetsModule } from './file-assets/file-assets.module'
 import { PermissionSetsModule } from './common/permissions/permission-sets.module'
+import { PostmanModule } from './postman/postman.module'
+import { GoogleDriveModule } from './integrations/google-drive/google-drive.module'
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { PermissionSetsModule } from './common/permissions/permission-sets.modul
     DocsModule,
     FileAssetsModule,
     PermissionSetsModule,
+    PostmanModule,
+    GoogleDriveModule,
   ],
   providers: [PrismaService]
 })

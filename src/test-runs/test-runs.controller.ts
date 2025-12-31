@@ -215,6 +215,65 @@ export class TestRunsController {
     return this.mapTestRun(testRun)
   }
 
+  @Patch('test-runs/:id')
+  @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
+  @RequirePermissions(Permission.TEST_RUN_UPDATE)
+  async update(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      build?: string
+      env?: string
+      platform?: string
+    },
+    @Request() req: any,
+  ) {
+    const runId = parseInt(id, 10)
+    if (!runId) throw new BadRequestException('Invalid test run id')
+
+    const testRun = await this.prisma.testRun.findUnique({
+      where: { id: runId },
+    })
+
+    if (!testRun || testRun.workspaceId !== req.workspaceId) {
+      throw new NotFoundException()
+    }
+    await requireProjectAccess(this.prisma, testRun.projectId, req.user.sub, req.workspaceId)
+
+    const updateData: any = {}
+    if (body.build !== undefined) updateData.build = body.build
+    if (body.env !== undefined) updateData.env = body.env
+    if (body.platform !== undefined) updateData.platform = body.platform
+
+    if (Object.keys(updateData).length === 0) {
+      throw new BadRequestException('At least one field (build, env, platform) must be provided')
+    }
+
+    const updated = await this.prisma.testRun.update({
+      where: { id: runId },
+      data: updateData,
+      include: {
+        items: {
+          include: {
+            testCase: {
+              include: { steps: { orderBy: { order: 'asc' } } },
+            },
+            executedBy: {
+              select: { id: true, email: true, name: true },
+            },
+            attachments: true,
+          },
+          orderBy: { id: 'asc' },
+        },
+        createdBy: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+    })
+
+    return this.mapTestRun(updated)
+  }
+
   @Patch('test-run-items/:id')
   @UseGuards(WorkspaceMemberGuard, PermissionsGuard)
   @RequirePermissions(Permission.TEST_RUN_EXECUTE)

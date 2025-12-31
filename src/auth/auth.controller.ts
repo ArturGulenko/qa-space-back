@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common'
+import { Controller, Post, Body, UseGuards, Request, Get, HttpException, HttpStatus } from '@nestjs/common'
 import { AuthService } from './auth.service'
 import { UsersService } from '../users/users.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -9,20 +9,28 @@ export class AuthController {
 
   @Post('login')
   async login(@Body() body: { email: string; password: string }) {
-    const user = await this.auth.validateUser(body.email, body.password)
-    if (!user) return { error: 'invalid_credentials' }
-    const tokens = await this.auth.login(user)
-    return {
-      tokens: {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      },
-      user: {
-        id: user.id.toString(),
-        email: user.email,
-        name: user.name || '',
-        isSuperAdmin: user.isSuperAdmin,
-      },
+    try {
+      const user = await this.auth.validateUser(body.email, body.password)
+      if (!user) return { error: 'invalid_credentials' }
+      const tokens = await this.auth.login(user)
+      return {
+        tokens: {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        },
+        user: {
+          id: user.id.toString(),
+          email: user.email,
+          name: user.name || '',
+          isSuperAdmin: user.isSuperAdmin,
+        },
+      }
+    } catch (error: any) {
+      console.error('Login error:', error)
+      throw new HttpException(
+        error.message || 'Internal server error',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      )
     }
   }
 

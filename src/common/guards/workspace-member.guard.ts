@@ -8,13 +8,30 @@ export class WorkspaceMemberGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest()
     const user = req.user
+    if (!user?.sub) return false
+
     const headerWorkspace = req.headers['x-workspace-id']
     const paramWorkspace = req.params.id || req.params.workspaceId
-    const workspaceId = parseInt(headerWorkspace || paramWorkspace, 10)
+    let workspaceId = parseInt(headerWorkspace || paramWorkspace, 10)
+
+    // For /docs/:id endpoint, try to get workspaceId from document if header is not provided
+    if (!workspaceId && req.url?.includes('/docs/') && req.params.id && req.method === 'GET') {
+      const docId = parseInt(req.params.id, 10)
+      if (docId && !isNaN(docId)) {
+        const doc = await this.prisma.doc.findUnique({
+          where: { id: docId },
+          select: { workspaceId: true },
+        })
+        if (doc) {
+          workspaceId = doc.workspaceId
+        }
+      }
+    }
+
     if (headerWorkspace && paramWorkspace && parseInt(headerWorkspace, 10) !== parseInt(paramWorkspace, 10)) {
       return false
     }
-    if (!workspaceId || !user?.sub) return false
+    if (!workspaceId) return false
 
     // Check if user is superadmin - superadmin has access to all workspaces
     const userRecord = await this.prisma.user.findUnique({

@@ -1,23 +1,23 @@
-# Скрипты для деплоя на GCP
+# Scripts for GCP Deployment
 
-Скрипты для автоматизации процесса деплоя приложения на Google Cloud Platform.
+Scripts for automating the deployment process to Google Cloud Platform.
 
-## 📋 Требования
+## 📋 Requirements
 
-- Google Cloud SDK (gcloud) установлен и настроен
-- Права на выполнение: `chmod +x scripts/*.sh`
-- Авторизация в GCP: `gcloud auth login`
+- Google Cloud SDK (gcloud) installed and configured
+- Execution permissions: `chmod +x scripts/*.sh`
+- GCP authorization: `gcloud auth login`
 
-## 🚀 Скрипты для GCP
+## 🚀 GCP Scripts
 
 ### `setup-gcp.sh`
-Создает все необходимые ресурсы GCP:
-- Cloud SQL PostgreSQL инстанс
-- GCS bucket для файлов
-- Service Accounts с необходимыми правами
+Creates all necessary GCP resources:
+- Cloud SQL PostgreSQL instance
+- GCS bucket for files
+- Service Accounts with required permissions
 - Secret Manager secrets
 
-**Использование:**
+**Usage:**
 ```bash
 ./scripts/setup-gcp.sh PROJECT_ID [REGION]
 # или
@@ -26,55 +26,55 @@ export GOOGLE_CLOUD_PROJECT=your-project-id
 ```
 
 ### `run-migrations-gcp.sh`
-Запускает миграции Prisma на Cloud Run Job.
+Runs Prisma migrations on Cloud Run Job.
 
-**Использование:**
+**Usage:**
 ```bash
 ./scripts/run-migrations-gcp.sh PROJECT_ID [REGION]
 ```
 
 ### `deploy-gcp.sh`
-Развертывает приложение на Cloud Run.
+Deploys the application to Cloud Run.
 
-**Использование:**
+**Usage:**
 ```bash
 ./scripts/deploy-gcp.sh PROJECT_ID [REGION] [IMAGE_TAG]
 ```
 
-## 🔄 Типичный workflow для GCP
+## 🔄 Typical GCP Workflow
 
 ```bash
-# 1. Настройка ресурсов GCP (один раз)
+# 1. Set up GCP resources (one time)
 ./scripts/setup-gcp.sh your-project-id us-central1
 
-# 2. Запуск миграций
+# 2. Run migrations
 ./scripts/run-migrations-gcp.sh your-project-id us-central1
 
-# 3. Развертывание приложения
+# 3. Deploy application
 ./scripts/deploy-gcp.sh your-project-id us-central1
 
-# 4. Обновление приложения (при изменениях)
+# 4. Update application (when changes occur)
 ./scripts/deploy-gcp.sh your-project-id us-central1 latest
 ```
 
-## 📝 Локальные скрипты
+## 📝 Local Scripts
 
 ### `add-superadmin.ts`
-Создает суперадминистратора в системе.
+Creates a super administrator in the system.
 
-**Использование:**
+**Usage:**
 ```bash
 npm run add-superadmin
 ```
 
 ### `create-superadmin.ts`
-Альтернативный скрипт для создания суперадминистратора.
+Alternative script for creating a super administrator.
 
-**Использование:**
+**Usage:**
 ```bash
 npm run create-superadmin
 ```
 
-## 📚 Дополнительная документация
+## 📚 Additional Documentation
 
-Полное руководство по развертыванию: `../GCP_DEPLOYMENT.md`
+Full deployment guide: `../GCP_DEPLOYMENT.md`

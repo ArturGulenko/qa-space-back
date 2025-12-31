@@ -1,62 +1,63 @@
-# 🚀 Быстрый старт: Развертывание на GCP
+# 🚀 Quick Start: Deployment to GCP
 
-## Шаг 1: Установка и настройка
+## Step 1: Installation and Setup
 
 ```bash
-# Установите Google Cloud SDK (если еще не установлен)
+# Install Google Cloud SDK (if not already installed)
 # https://cloud.google.com/sdk/docs/install
 
-# Авторизуйтесь
+# Authenticate
 gcloud auth login
 gcloud auth application-default login
 
-# Установите проект
+# Set the project
 export GOOGLE_CLOUD_PROJECT="your-project-id"
 gcloud config set project $GOOGLE_CLOUD_PROJECT
 ```
 
-## Шаг 2: Создание ресурсов
+## Step 2: Create Resources
 
 ```bash
-# Сделайте скрипты исполняемыми (Linux/Mac)
+# Make scripts executable (Linux/Mac)
 chmod +x scripts/*.sh
 
-# Запустите настройку (создаст все ресурсы)
+# Run setup (will create all resources)
 ./scripts/setup-gcp.sh $GOOGLE_CLOUD_PROJECT us-central1
 ```
 
-**Важно:** Сохраните пароли и ключи, которые будут показаны!
+**Important:** Save the passwords and keys that will be shown!
 
-## Шаг 3: Запуск миграций
+## Step 3: Run Migrations
 
 ```bash
 ./scripts/run-migrations-gcp.sh $GOOGLE_CLOUD_PROJECT us-central1
 ```
 
-## Шаг 4: Развертывание
+## Step 4: Deploy
 
 ```bash
 ./scripts/deploy-gcp.sh $GOOGLE_CLOUD_PROJECT us-central1
 ```
 
-После развертывания вы получите URL вашего приложения.
+After deployment, you will receive the URL of your application.
 
-## Проверка
+## Verification
 
 ```bash
-# Получите URL сервиса
+# Get service URL
 gcloud run services describe qa-space-backend --region=us-central1 --format="value(status.url)"
 
-# Проверьте health endpoint
+# Check health endpoint
 curl https://YOUR-SERVICE-URL/health
 ```
 
-## Что дальше?
+## What's Next?
 
-- Обновите фронтенд с новым URL бекенда
-- Настройте домен (опционально)
-- Настройте мониторинг и алерты
+- Update frontend with new backend URL
+- Configure domain (optional)
+- Set up monitoring and alerts
 
-Полная документация: `../GCP_DEPLOYMENT.md`
+Full documentation: `../GCP_DEPLOYMENT.md`
+
 
 

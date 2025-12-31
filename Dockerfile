@@ -1,8 +1,9 @@
 FROM node:18-alpine
 WORKDIR /usr/src/app
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile
+RUN apk add --no-cache openssl libc6-compat
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
-RUN yarn build
+RUN npm run build
 EXPOSE 3000
 CMD ["node", "dist/main.js"]

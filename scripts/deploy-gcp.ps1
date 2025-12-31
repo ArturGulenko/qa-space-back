@@ -1,11 +1,17 @@
-﻿# PowerShell СЃРєСЂРёРїС‚ РґР»СЏ СЂР°Р·РІРµСЂС‚С‹РІР°РЅРёСЏ РЅР° Cloud Run
-# РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ: .\scripts\deploy-gcp.ps1 [PROJECT_ID] [REGION] [IMAGE_TAG]
-
 param(
     [string]$ProjectId = $env:GOOGLE_CLOUD_PROJECT,
     [string]$Region = "us-central1",
     [string]$ImageTag = "latest"
 )
+
+# Set UTF-8 encoding for proper text display
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+
+# PowerShell script for deployment to Cloud Run
+# Usage: .\scripts\deploy-gcp.ps1 [PROJECT_ID] [REGION] [IMAGE_TAG]
+
 
 if ([string]::IsNullOrWhiteSpace($ProjectId)) {
     Write-Host "PROJECT_ID is required. Usage: .\\scripts\\deploy-gcp.ps1 PROJECT_ID [REGION] [IMAGE_TAG]" -ForegroundColor Red
@@ -19,10 +25,10 @@ Write-Host "Region: $Region"
 Write-Host "Image Tag: $ImageTag"
 Write-Host ""
 
-# РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РїСЂРѕРµРєС‚
+# Set the project
 gcloud config set project $ProjectId | Out-Null
 
-# РџРѕР»СѓС‡Р°РµРј connection name Cloud SQL
+# Get Cloud SQL connection name
 $DB_INSTANCE = "qa-space-db"
 $CONNECTION_NAME = gcloud sql instances describe $DB_INSTANCE --format="value(connectionName)" 2>&1
 
@@ -31,7 +37,7 @@ if ([string]::IsNullOrWhiteSpace($CONNECTION_NAME) -or $CONNECTION_NAME -match "
     exit 1
 }
 
-# РџРѕР»СѓС‡Р°РµРј Service Account
+# Get Service Account
 $SA_EMAIL = "qa-space-backend@${ProjectId}.iam.gserviceaccount.com"
 
 # Load secrets JSON from Secret Manager or local file.
@@ -70,7 +76,7 @@ if ($databaseUrl -notmatch "connection_limit=") {
     }
 }
 
-# РЎРѕР±РёСЂР°РµРј РѕР±СЂР°Р·
+# Build image
 Write-Host "Building Docker image..." -ForegroundColor Yellow
 gcloud builds submit --config=cloudbuild-simple.yaml
 
@@ -79,7 +85,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Р Р°Р·РІРµСЂС‚С‹РІР°РµРј РЅР° Cloud Run
+# Deploy to Cloud Run
 Write-Host ""
 Write-Host "Deploying to Cloud Run..." -ForegroundColor Yellow
 gcloud run deploy qa-space-backend `
@@ -89,7 +95,7 @@ gcloud run deploy qa-space-backend `
   --allow-unauthenticated `
   --service-account $SA_EMAIL `
   --add-cloudsql-instances $CONNECTION_NAME `
-  --set-env-vars "NODE_ENV=production,DATABASE_URL=$databaseUrl,JWT_ACCESS_SECRET=$($secrets.JWT_ACCESS_SECRET),JWT_REFRESH_SECRET=$($secrets.JWT_REFRESH_SECRET),S3_BUCKET=$($secrets.S3_BUCKET),S3_REGION=$($secrets.S3_REGION),S3_ENDPOINT=$($secrets.S3_ENDPOINT),S3_ACCESS_KEY=$($secrets.S3_ACCESS_KEY),S3_SECRET_KEY=$($secrets.S3_SECRET_KEY),ALLOWED_ORIGINS=$($secrets.ALLOWED_ORIGINS)" `
+  --set-env-vars "NODE_ENV=production,DATABASE_URL=$databaseUrl,JWT_ACCESS_SECRET=$($secrets.JWT_ACCESS_SECRET),JWT_REFRESH_SECRET=$($secrets.JWT_REFRESH_SECRET),S3_BUCKET=$($secrets.S3_BUCKET),S3_REGION=$($secrets.S3_REGION),S3_ENDPOINT=$($secrets.S3_ENDPOINT),S3_ACCESS_KEY=$($secrets.S3_ACCESS_KEY),S3_SECRET_KEY=$($secrets.S3_SECRET_KEY),ALLOWED_ORIGINS=$($secrets.ALLOWED_ORIGINS),GOOGLE_DRIVE_CLIENT_ID=$($secrets.GOOGLE_DRIVE_CLIENT_ID),GOOGLE_DRIVE_CLIENT_SECRET=$($secrets.GOOGLE_DRIVE_CLIENT_SECRET),GOOGLE_DRIVE_REDIRECT_URI=$($secrets.GOOGLE_DRIVE_REDIRECT_URI)" `
   --memory 512Mi `
   --cpu 1 `
   --min-instances 0 `
@@ -102,7 +108,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# РџРѕР»СѓС‡Р°РµРј URL СЃРµСЂРІРёСЃР°
+# Get service URL
 $SERVICE_URL = gcloud run services describe qa-space-backend --region=$Region --format="value(status.url)"
 
 Write-Host ""
@@ -117,5 +123,6 @@ Write-Host "   gcloud run services describe qa-space-backend --region=$Region" -
 Write-Host ""
 Write-Host "Logs:" -ForegroundColor Cyan
 Write-Host "   gcloud run services logs read qa-space-backend --region=$Region --limit=50" -ForegroundColor Gray
+
 
 

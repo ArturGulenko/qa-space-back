@@ -1,5 +1,10 @@
-# PowerShell скрипт для завершения настройки GCP
-# Запустите после того, как Cloud SQL инстанс будет готов
+# Set UTF-8 encoding for proper text display
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+
+# PowerShell script to complete GCP setup
+# Run after Cloud SQL instance is ready
 
 $PROJECT_ID = "qa-space-482211"
 $REGION = "us-central1"
@@ -7,59 +12,59 @@ $DB_INSTANCE = "qa-space-db"
 $DB_NAME = "qa_space"
 $DB_USER = "postgres"
 
-Write-Host "🔍 Проверка статуса Cloud SQL инстанса..." -ForegroundColor Cyan
+Write-Host "🔍 Checking Cloud SQL instance status..." -ForegroundColor Cyan
 $status = gcloud sql instances describe $DB_INSTANCE --format="value(state)" 2>&1
 
 if ($status -ne "RUNNABLE") {
-    Write-Host "❌ Инстанс еще не готов. Текущий статус: $status" -ForegroundColor Red
-    Write-Host "   Подождите несколько минут и запустите скрипт снова." -ForegroundColor Yellow
+    Write-Host "❌ Instance is not ready yet. Current status: $status" -ForegroundColor Red
+    Write-Host "   Wait a few minutes and run the script again." -ForegroundColor Yellow
     exit 1
 }
 
-Write-Host "✅ Инстанс готов!" -ForegroundColor Green
+Write-Host "✅ Instance is ready!" -ForegroundColor Green
 
-# Создаем базу данных
+# Create database
 Write-Host ""
-Write-Host "🗄️  Создание базы данных..." -ForegroundColor Cyan
+Write-Host "🗄️  Creating database..." -ForegroundColor Cyan
 gcloud sql databases create $DB_NAME --instance=$DB_INSTANCE 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "✅ База данных создана" -ForegroundColor Green
+    Write-Host "✅ Database created" -ForegroundColor Green
 } else {
-    Write-Host "⚠️  База данных уже существует или ошибка создания" -ForegroundColor Yellow
+    Write-Host "⚠️  Database already exists or creation error" -ForegroundColor Yellow
 }
 
-# Получаем connection name
+# Get connection name
 $CONNECTION_NAME = gcloud sql instances describe $DB_INSTANCE --format="value(connectionName)"
 Write-Host "   Connection Name: $CONNECTION_NAME" -ForegroundColor Gray
 
-# Читаем пароль
+# Read password
 $DB_PASSWORD = Get-Content db-password.txt -ErrorAction SilentlyContinue
 if (-not $DB_PASSWORD) {
-    Write-Host "❌ Файл db-password.txt не найден!" -ForegroundColor Red
+    Write-Host "❌ File db-password.txt not found!" -ForegroundColor Red
     exit 1
 }
 
-# Читаем JWT секреты
+# Read JWT secrets
 $jwtSecrets = Get-Content jwt-secrets.json | ConvertFrom-Json
 $JWT_ACCESS_SECRET = $jwtSecrets.ACCESS
 $JWT_REFRESH_SECRET = $jwtSecrets.REFRESH
 
-# Читаем GCS ключ
+# Read GCS key
 $gcsKey = Get-Content gcs-key.json | ConvertFrom-Json
 $GCS_ACCESS_KEY = $gcsKey.client_email
 $GCS_SECRET_KEY = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($gcsKey.private_key))
 
-# Формируем DATABASE_URL
+# Build DATABASE_URL
 $DATABASE_URL = "postgresql://${DB_USER}:${DB_PASSWORD}@/${DB_NAME}?host=/cloudsql/${CONNECTION_NAME}"
 
-# Запрашиваем ALLOWED_ORIGINS
+# Request ALLOWED_ORIGINS
 Write-Host ""
-$ALLOWED_ORIGINS = Read-Host "Введите ALLOWED_ORIGINS (через запятую, или * для всех) [*]"
+$ALLOWED_ORIGINS = Read-Host "Enter ALLOWED_ORIGINS (comma-separated, or * for all) [*]"
 if ([string]::IsNullOrWhiteSpace($ALLOWED_ORIGINS)) {
     $ALLOWED_ORIGINS = "*"
 }
 
-# Создаем JSON для Secret Manager
+# Create JSON for Secret Manager
 $BUCKET_NAME = "${PROJECT_ID}-qa-space-files"
 $GCS_ENDPOINT = "https://storage.googleapis.com"
 
@@ -75,42 +80,43 @@ $secretJson = @{
     ALLOWED_ORIGINS = $ALLOWED_ORIGINS
 } | ConvertTo-Json
 
-# Сохраняем во временный файл
+# Save to temporary file
 $secretJson | Out-File -FilePath secrets-temp.json -Encoding utf8
 
-# Создаем или обновляем secret
+# Create or update secret
 Write-Host ""
-Write-Host "🔐 Создание Secret Manager secret..." -ForegroundColor Cyan
+Write-Host "🔐 Creating Secret Manager secret..." -ForegroundColor Cyan
 $secretExists = gcloud secrets describe qa-space-secrets 2>&1
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "   Обновление существующего secret..." -ForegroundColor Yellow
+    Write-Host "   Updating existing secret..." -ForegroundColor Yellow
     gcloud secrets versions add qa-space-secrets --data-file=secrets-temp.json
 } else {
-    Write-Host "   Создание нового secret..." -ForegroundColor Yellow
+    Write-Host "   Creating new secret..." -ForegroundColor Yellow
     gcloud secrets create qa-space-secrets --data-file=secrets-temp.json --replication-policy="automatic"
 }
 
-# Даем доступ Service Account
+# Grant access to Service Account
 $SA_EMAIL = "qa-space-backend@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud secrets add-iam-policy-binding qa-space-secrets `
     --member="serviceAccount:${SA_EMAIL}" `
     --role="roles/secretmanager.secretAccessor" | Out-Null
 
-Write-Host "✅ Secret создан/обновлен" -ForegroundColor Green
+Write-Host "✅ Secret created/updated" -ForegroundColor Green
 
-# Очистка
+# Cleanup
 Remove-Item secrets-temp.json -ErrorAction SilentlyContinue
 
 Write-Host ""
-Write-Host "✅ Настройка завершена!" -ForegroundColor Green
+Write-Host "✅ Setup completed!" -ForegroundColor Green
 Write-Host ""
-Write-Host "📋 Следующие шаги:" -ForegroundColor Cyan
-Write-Host "1. Запустите миграции: .\scripts\run-migrations-gcp.ps1" -ForegroundColor White
-Write-Host "2. Разверните приложение: .\scripts\deploy-gcp.ps1" -ForegroundColor White
+Write-Host "📋 Next steps:" -ForegroundColor Cyan
+Write-Host "1. Run migrations: .\scripts\run-migrations-gcp.ps1" -ForegroundColor White
+Write-Host "2. Deploy application: .\scripts\deploy-gcp.ps1" -ForegroundColor White
 Write-Host ""
-Write-Host "📊 Полезные команды:" -ForegroundColor Cyan
+Write-Host "📊 Useful commands:" -ForegroundColor Cyan
 Write-Host "   gcloud run services describe qa-space-backend --region=$REGION" -ForegroundColor Gray
 Write-Host "   gcloud sql instances describe $DB_INSTANCE" -ForegroundColor Gray
 Write-Host "   gsutil ls gs://$BUCKET_NAME" -ForegroundColor Gray
+
 
 

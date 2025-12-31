@@ -17,11 +17,20 @@ export class AuthService {
   }
 
   async login(user: any) {
-    const payload = { sub: user.id, email: user.email }
-    const accessToken = this.jwt.sign(payload)
-    const refreshToken = await this.generateRefreshToken(user.id)
-    await this.users.setRefreshToken(user.id, refreshToken)
-    return { accessToken, refreshToken }
+    try {
+      const payload = { sub: user.id, email: user.email }
+      const accessSecret = this.config.get('JWT_ACCESS_SECRET')
+      if (!accessSecret) {
+        throw new Error('JWT_ACCESS_SECRET is not configured')
+      }
+      const accessToken = this.jwt.sign(payload)
+      const refreshToken = await this.generateRefreshToken(user.id)
+      await this.users.setRefreshToken(user.id, refreshToken)
+      return { accessToken, refreshToken }
+    } catch (error: any) {
+      console.error('Login service error:', error)
+      throw error
+    }
   }
 
   async refresh(refreshToken: string) {
@@ -46,6 +55,9 @@ export class AuthService {
 
   async generateRefreshToken(userId: number) {
     const secret = this.config.get('JWT_REFRESH_SECRET')
+    if (!secret) {
+      throw new Error('JWT_REFRESH_SECRET is not configured')
+    }
     const signOptions = { expiresIn: this.config.get('JWT_REFRESH_EXPIRES_IN') || '7d' }
     const token = this.jwt.sign({ sub: userId }, { secret, expiresIn: signOptions.expiresIn })
     return token

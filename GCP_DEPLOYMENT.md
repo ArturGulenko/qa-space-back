@@ -298,3 +298,9 @@ gsutil iam ch serviceAccount:qa-space-gcs@$PROJECT_ID.iam.gserviceaccount.com:ob
 Cloud Run автоматически масштабируется и управляет нагрузкой, что упрощает развертывание по сравнению с ECS.
 
 
+
+
+
+
+
+

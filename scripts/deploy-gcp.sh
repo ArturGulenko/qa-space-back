@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Скрипт для развертывания на Cloud Run
-# Использование: ./scripts/deploy-gcp.sh [PROJECT_ID] [REGION] [IMAGE_TAG]
+# Script for deployment to Cloud Run
+# Usage: ./scripts/deploy-gcp.sh [PROJECT_ID] [REGION] [IMAGE_TAG]
 
 set -e
 
@@ -10,39 +10,39 @@ REGION=${2:-us-central1}
 IMAGE_TAG=${3:-latest}
 
 if [ -z "$PROJECT_ID" ]; then
-  echo "❌ PROJECT_ID не указан. Используйте: ./scripts/deploy-gcp.sh PROJECT_ID [REGION] [IMAGE_TAG]"
+  echo "❌ PROJECT_ID not specified. Use: ./scripts/deploy-gcp.sh PROJECT_ID [REGION] [IMAGE_TAG]"
   exit 1
 fi
 
-echo "🚀 Развертывание QA Space Backend на Cloud Run"
+echo "🚀 Deploying QA Space Backend to Cloud Run"
 echo "=============================================="
 echo "Project ID: $PROJECT_ID"
 echo "Region: $REGION"
 echo "Image Tag: $IMAGE_TAG"
 echo ""
 
-# Устанавливаем проект
+# Set the project
 gcloud config set project $PROJECT_ID
 
-# Получаем connection name Cloud SQL
+# Get Cloud SQL connection name
 DB_INSTANCE="qa-space-db"
 CONNECTION_NAME=$(gcloud sql instances describe $DB_INSTANCE --format="value(connectionName)" 2>/dev/null || echo "")
 
 if [ -z "$CONNECTION_NAME" ]; then
-  echo "❌ Cloud SQL инстанс не найден. Сначала запустите: ./scripts/setup-gcp.sh"
+  echo "❌ Cloud SQL instance not found. Run first: ./scripts/setup-gcp.sh"
   exit 1
 fi
 
-# Получаем Service Account
+# Get Service Account
 SA_EMAIL="qa-space-backend@${PROJECT_ID}.iam.gserviceaccount.com"
 
-# Собираем образ
-echo "📦 Сборка Docker образа..."
+# Build image
+echo "📦 Building Docker image..."
 gcloud builds submit --tag gcr.io/$PROJECT_ID/qa-space-backend:$IMAGE_TAG
 
-# Развертываем на Cloud Run
+# Deploy to Cloud Run
 echo ""
-echo "🚀 Развертывание на Cloud Run..."
+echo "🚀 Deploying to Cloud Run..."
 gcloud run deploy qa-space-backend \
   --image gcr.io/$PROJECT_ID/qa-space-backend:$IMAGE_TAG \
   --region $REGION \
@@ -67,20 +67,21 @@ gcloud run deploy qa-space-backend \
   --timeout 300 \
   --port 3000
 
-# Получаем URL сервиса
+# Get service URL
 SERVICE_URL=$(gcloud run services describe qa-space-backend --region=$REGION --format="value(status.url)")
 
 echo ""
-echo "✅ Развертывание завершено!"
+echo "✅ Deployment completed!"
 echo ""
-echo "🌐 URL сервиса: $SERVICE_URL"
+echo "🌐 Service URL: $SERVICE_URL"
 echo "   Health check: $SERVICE_URL/health"
 echo "   API: $SERVICE_URL/api"
 echo ""
-echo "📊 Проверить статус:"
+echo "📊 Check status:"
 echo "   gcloud run services describe qa-space-backend --region=$REGION"
 echo ""
-echo "📋 Просмотр логов:"
+echo "📋 View logs:"
 echo "   gcloud run services logs read qa-space-backend --region=$REGION --limit=50"
+
 
 

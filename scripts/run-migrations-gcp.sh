@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Скрипт для запуска миграций Prisma на Cloud Run
-# Использование: ./scripts/run-migrations-gcp.sh [PROJECT_ID] [REGION]
+# Script to run Prisma migrations on Cloud Run
+# Usage: ./scripts/run-migrations-gcp.sh [PROJECT_ID] [REGION]
 
 set -e
 
@@ -9,49 +9,49 @@ PROJECT_ID=${1:-${GOOGLE_CLOUD_PROJECT}}
 REGION=${2:-us-central1}
 
 if [ -z "$PROJECT_ID" ]; then
-  echo "❌ PROJECT_ID не указан. Используйте: ./scripts/run-migrations-gcp.sh PROJECT_ID [REGION]"
+  echo "❌ PROJECT_ID not specified. Use: ./scripts/run-migrations-gcp.sh PROJECT_ID [REGION]"
   exit 1
 fi
 
-echo "🔄 Запуск миграций Prisma на Cloud Run"
+echo "🔄 Running Prisma migrations on Cloud Run"
 echo "======================================"
 echo "Project ID: $PROJECT_ID"
 echo "Region: $REGION"
 echo ""
 
-# Устанавливаем проект
+# Set the project
 gcloud config set project $PROJECT_ID
 
-# Получаем connection name Cloud SQL
+# Get Cloud SQL connection name
 DB_INSTANCE="qa-space-db"
 CONNECTION_NAME=$(gcloud sql instances describe $DB_INSTANCE --format="value(connectionName)" 2>/dev/null || echo "")
 
 if [ -z "$CONNECTION_NAME" ]; then
-  echo "❌ Cloud SQL инстанс не найден. Сначала запустите: ./scripts/setup-gcp.sh"
+  echo "❌ Cloud SQL instance not found. Run first: ./scripts/setup-gcp.sh"
   exit 1
 fi
 
-# Получаем Service Account
+# Get Service Account
 SA_EMAIL="qa-space-backend@${PROJECT_ID}.iam.gserviceaccount.com"
 
-# Собираем образ для миграций
-echo "📦 Сборка Docker образа для миграций..."
+# Build migration image
+echo "📦 Building Docker image for migrations..."
 if [ -f cloudbuild.migrations.yaml ]; then
   gcloud builds submit --config=cloudbuild.migrations.yaml .
 else
-  # Альтернативный способ - используем docker build напрямую
-  echo "   Используем прямой docker build..."
+  # Alternative method - use docker build directly
+  echo "   Using direct docker build..."
   docker build -f Dockerfile.migrations -t gcr.io/$PROJECT_ID/qa-space-migrations:latest .
   docker push gcr.io/$PROJECT_ID/qa-space-migrations:latest
 fi
 
-# Запускаем одноразовую задачу на Cloud Run
+# Run one-time task on Cloud Run
 echo ""
-echo "🚀 Создание/обновление Cloud Run Job для миграций..."
+echo "🚀 Creating/updating Cloud Run Job for migrations..."
 
-# Проверяем, существует ли job
+# Check if job exists
 if gcloud run jobs describe qa-space-migrations --region=$REGION &>/dev/null; then
-  echo "⚠️  Job уже существует, обновляем..."
+  echo "⚠️  Job already exists, updating..."
   gcloud run jobs update qa-space-migrations \
     --region $REGION \
     --image gcr.io/$PROJECT_ID/qa-space-migrations:latest \
@@ -67,7 +67,7 @@ if gcloud run jobs describe qa-space-migrations --region=$REGION &>/dev/null; th
     --args "-c" \
     --args "npx prisma migrate deploy && npx prisma generate"
 else
-  echo "✨ Создание нового Job..."
+  echo "✨ Creating new Job..."
   gcloud run jobs create qa-space-migrations \
     --image gcr.io/$PROJECT_ID/qa-space-migrations:latest \
     --region $REGION \
@@ -84,38 +84,38 @@ else
     --args "npx prisma migrate deploy && npx prisma generate"
 fi
 
-# Запускаем job
+# Execute job
 echo ""
-echo "⏳ Запуск задачи миграций..."
+echo "⏳ Starting migration task..."
 EXECUTION_NAME=$(gcloud run jobs execute qa-space-migrations --region=$REGION --format="value(metadata.name)")
 
-echo "✅ Задача запущена: $EXECUTION_NAME"
+echo "✅ Task started: $EXECUTION_NAME"
 echo ""
-echo "📊 Отслеживание выполнения:"
+echo "📊 Monitor execution:"
 echo "   gcloud run jobs executions describe $EXECUTION_NAME --region=$REGION"
 echo ""
-echo "📋 Просмотр логов:"
+echo "📋 View logs:"
 echo "   gcloud logging read \"resource.type=cloud_run_job AND resource.labels.job_name=qa-space-migrations\" --limit=50 --format=json"
 
-# Ждем завершения
+# Wait for completion
 echo ""
-echo "⏳ Ожидание завершения миграций (это может занять несколько минут)..."
-echo "   Вы можете отслеживать прогресс в Cloud Console или через логи"
+echo "⏳ Waiting for migrations to complete (this may take several minutes)..."
+echo "   You can track progress in Cloud Console or through logs"
 
-# Ждем завершения выполнения
+# Wait for execution to complete
 gcloud run jobs executions wait $EXECUTION_NAME --region=$REGION --timeout=600
 
-# Проверяем статус
+# Check status
 STATUS=$(gcloud run jobs executions describe $EXECUTION_NAME --region=$REGION --format="value(status.conditions[0].type)" 2>/dev/null || echo "Unknown")
 
 if [ "$STATUS" = "Complete" ]; then
   echo ""
-  echo "✅ Миграции успешно выполнены!"
+  echo "✅ Migrations completed successfully!"
   exit 0
 else
   echo ""
-  echo "⚠️  Миграции завершились со статусом: $STATUS"
-  echo "   Проверьте логи для деталей:"
+  echo "⚠️  Migrations finished with status: $STATUS"
+  echo "   Check logs for details:"
   echo "   gcloud logging read \"resource.type=cloud_run_job AND resource.labels.job_name=qa-space-migrations\" --limit=50"
   exit 1
 fi
